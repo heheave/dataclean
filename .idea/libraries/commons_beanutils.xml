@@ -1,0 +1,25 @@
+<component name="libraryTable">
+  <library name="commons-beanutils">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/jars/commons-beanutils.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/commons-collections-3.2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/commons-lang.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/commons-logging-1.1.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/dom4j-1.6.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/ezmorph-1.0.6.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/json-lib-2.4-jdk15.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/kafka-clients-0.10.0.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/kafka_2.10-0.8.2.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/log4j.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/metrics-core-2.2.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/mongo-java-driver-3.2.2.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/morph-1.1.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/spark-assembly-1.6.3-hadoop2.6.0.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/spark-streaming-kafka_2.10-1.6.3.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES>
+      <root url="jar://$PROJECT_DIR$/jars/spark-assembly-1.6.3-hadoop2.6.0.jar!/" />
+    </SOURCES>
+  </library>
+</component>
