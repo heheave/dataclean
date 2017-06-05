@@ -24,4 +24,25 @@ public class JavaV {
     public static final String KAFKA_AUTO_COMMIT_INTERVAL = "sjtumaster.auto.commit.interval";
 
     public static final String SPARKSTREAMING_CLEANED_TOPIC = "sjtumaster.sparkstreaming.cleaned.topic";
+
+    public static final String DEVICE_CONFIG_PATH = "sjtumaster.device.config.path";
+    public static final String DC_ZK_HOST = "sjtumaster.dc.zk.host";
+    public static final String DC_ZK_PORT = "sjtumaster.dc.zk.port";
+    public static final String DC_ZK_TIMEOUT = "sjtumaster.dc.zk.timout";
+    public static final String DC_ZK_PATH = "sjtumaster.dc.zk.path";
+    public static final String DC_MYSQL_HOST = "sjtumaster.dc.mysql.host";
+    public static final String DC_MYSQL_PORT = "sjtumaster.dc.mysql.port";
+    public static final String DC_MYSQL_DBNAME = "sjtumaster.dc.mysql.dbname";
+    public static final String DC_MYSQL_USER = "sjtumaster.dc.mysql.user";
+    public static final String DC_MYSQL_PASSWD = "sjtumaster.dc.mysql.passwd";
+
+    public static final String HDFS_BASE_PATH = "sjtumaster.hdfs.base.path";
+    public static final String HDFS_FILE_APPENDED = "sjtumaster.hdfs.file.appended";
+
+
+    public static final String MONGODB_HOST = "sjtumaster.mongo.host";
+    public static final String MONGODB_PORT = "sjtumaster.mongo.port";
+    public static final String MONGODB_DBNAME = "sjtumaster.mongo.dbname";
+    public static final String MONGODB_TBLNAME = "sjtumaster.mongo.tblname";
+
 }

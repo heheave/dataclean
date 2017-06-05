@@ -1,5 +1,5 @@
 <component name="libraryTable">
-  <library name="commons-beanutils">
+  <library name="commons-beanutils1">
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/jars/commons-beanutils.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/commons-collections-3.2.1.jar!/" />
@@ -14,6 +14,7 @@
       <root url="jar://$PROJECT_DIR$/jars/metrics-core-2.2.0.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/mongo-java-driver-3.2.2.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/morph-1.1.1.jar!/" />
+      <root url="jar://$PROJECT_DIR$/jars/mysql-connector-java-5.0.8-bin.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/spark-assembly-1.6.3-hadoop2.6.0.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/spark-streaming-kafka_2.10-1.6.3.jar!/" />
     </CLASSES>
