@@ -168,7 +168,7 @@ class DeviceConfigMananger(prop: Properties) {
   private def readByAfterId(id: Int): util.List[(String, Int, Action)] = {
     val conn = mysqlPool.getConnection
     if (conn != null) {
-      val pstat = conn.prepareStatement("select id, did, pidx, cmd, avg, used from deviceConfig where id >= ?")
+      val pstat = conn.prepareStatement("select id, did, pidx, cmd, avg, used from deviceConfig where id >= ? and used = 1")
       pstat.setInt(1, id)
       try {
         var maxId = -1
@@ -180,9 +180,8 @@ class DeviceConfigMananger(prop: Properties) {
           val did = resSet.getString("did")
           val pidx = resSet.getInt("pidx")
           if (did != null) {
-            val used = resSet.getInt("used")
             val cmd = resSet.getString("cmd")
-            if (used == 1 && cmd != null) {
+            if (cmd != null) {
               val avg = resSet.getString("avg")
               val action = parseLine(cmd, avg)
               res.add(did, pidx, action)
