@@ -1,7 +1,9 @@
 package javaclz.mysql;
 
+import com.mchange.v2.c3p0.ComboPooledDataSource;
 import org.apache.log4j.Logger;
 
+import java.beans.PropertyVetoException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -24,6 +26,28 @@ public class MySQLAccessor {
         }
     }
 
+    public static ComboPooledDataSource getDataSource(String host, int port, String dbname, String user, String passwd) {
+        ComboPooledDataSource ds = new ComboPooledDataSource();
+        String url = String.format(URL_FORMAT, host, port, dbname);
+        ds.setJdbcUrl(url);
+        ds.setUser(user);
+        ds.setPassword(passwd);
+        // use default deviceconfig
+        try {
+            ds.setDriverClass("com.mysql.jdbc.Driver");
+        } catch (PropertyVetoException e) {
+            log.error("Not sql driver", e);
+            throw new RuntimeException("com.mysql.jdbc.Driver is not found");
+        }
+        ds.setInitialPoolSize(10);
+        ds.setMinPoolSize(2);
+        ds.setMaxIdleTime(1800);
+        ds.setMaxPoolSize(20);
+        ds.setAcquireIncrement(2);
+        ds.setMaxStatements(100);
+        return ds;
+    }
+
     public static Connection getConnector(String host, int port, String dbname, String user, String passwd) {
         String url = String.format(URL_FORMAT, host, port, dbname);
         Connection conn = null;
@@ -43,7 +67,6 @@ public class MySQLAccessor {
                 log.warn("Close statement error", e);
             }
         }
-
 
         if (conn != null) {
             try {

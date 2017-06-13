@@ -30,7 +30,7 @@ object SimpleKafkaUtils {
       "rebalance.max.retries" ->  conf.getStringOrElse(JavaV.KAFKA_REBALANCE_MAX_RETRIES, "5"),
       "rebalance.backoff.ms" ->  conf.getStringOrElse(JavaV.KAFKA_REBALANCE_BACKOFF, "1200"),
       "auto.commit.interval.ms" ->  conf.getStringOrElse(JavaV.KAFKA_AUTO_COMMIT_INTERVAL, "1000"),
-      "auto.offset.reset" -> "smallest"
+      "auto.offset.reset" -> conf.getStringOrElse(JavaV.KAFKA_AUTO_OFFSET_RESET, "largest")
       // 序列化类
       //"serializer.class" -> "kafka.serializer.StringEncoder"
     )
@@ -48,8 +48,7 @@ object SimpleKafkaUtils {
     kafkaProducerConf.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, serverUrl)
     kafkaProducerConf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
     kafkaProducerConf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
-    val producerTopic = conf.getStringOrElse(JavaV.SPARKSTREAMING_CLEANED_TOPIC, "cleaned-data-topic")
-    val kafkaSink = KafkaSink(producerTopic, kafkaProducerConf)
+    val kafkaSink = KafkaSink(kafkaProducerConf)
     kafkaSink
   }
 

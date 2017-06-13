@@ -7,6 +7,7 @@ import javaclz.persist.config.DbAccessorConf;
 import javaclz.persist.config.FileAccessorConf;
 import javaclz.persist.config.PersistenceAccessorConf;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 public class PersistenceAccessorFactory {
@@ -66,11 +67,16 @@ public class PersistenceAccessorFactory {
 	}
 	
 	private static FileAccessor getFileAccessor(FileAccessorConf fac) {
-		String DATE_FORMAT = fac.getDateFormate();
+		String DATE_FORMAT = fac.getDateFormat();
 		if (DATE_FORMAT == null) {
 			return null;
 		}
-		return new FileAccessor(DATE_FORMAT);
+		try {
+			return new FileAccessor(fac.getConfiguration(), DATE_FORMAT);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return  null;
+		}
 
 	}
 	

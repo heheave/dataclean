@@ -108,6 +108,8 @@ sealed class AvgCache(avg: Avg) {
     }
   }
 
+  def avgName = avg.avgType()
+
   def addData(did: String, pidx: Int, timestamp: Long, data: Double): CacheInfo = {
     val key = CacheKey(did, pidx)
     val cacheInfo = avgMap.get(key)
@@ -136,6 +138,8 @@ sealed class AvgCache(avg: Avg) {
 
 class AvgCacheTool(fun: () => AvgCache) extends Serializable{
   lazy val avgCache = fun()
+
+  def avgName = avgCache.avgName
 
   def addData(did: String, pidx: Int, timestamp: Long, data: Double): CacheInfo = avgCache.addData(did, pidx, timestamp, data)
 }

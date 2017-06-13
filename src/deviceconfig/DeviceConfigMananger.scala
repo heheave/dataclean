@@ -1,4 +1,4 @@
-package config
+package deviceconfig
 
 import java.util
 import java.util.Properties
@@ -10,6 +10,7 @@ import javaclz.zk.ZkClient.ZkReconnected
 import javaclz.JavaV
 
 import action._
+import com.mchange.v2.c3p0.ComboPooledDataSource
 import org.apache.log4j.Logger
 import org.apache.zookeeper.Watcher.Event
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -17,79 +18,97 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 /**
   * Created by xiaoke on 17-6-4.
   */
-class DeviceZkConfigMananger(prop: Properties) {
+class DeviceConfigMananger(prop: Properties) {
 
   private val log = Logger.getLogger(this.getClass)
 
-  private val curIndex = new AtomicInteger(-1)
+  @transient private val curIndex = new AtomicInteger(-1)
 
-  private val config: Config = new Config()
+  @transient private val config: DeviceConfigMap = new DeviceConfigMap()
 
-  private val latch = new CountDownLatch(1)
+  @transient @volatile var zkClient: ZkClient = _
 
-  private val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "localhost")
-
-  private val zkPort = prop.getProperty(JavaV.DC_ZK_PORT, "2181").toInt
-
-  private val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
-
-  private val zkWatchPath = prop.getProperty(JavaV.DC_ZK_PATH, "/deviceConfig/change")
-
-  private val mysqlHost = prop.getProperty(JavaV.DC_MYSQL_HOST, "localhost")
-
-  private val mysqlPort = prop.getProperty(JavaV.DC_MYSQL_PORT, "3306").toInt
-
-  private val mysqlDbname = prop.getProperty(JavaV.DC_MYSQL_DBNAME, "device")
-
-  private val mysqlUser = prop.getProperty(JavaV.DC_MYSQL_USER, "root")
-
-  private val mysqlPasswd = prop.getProperty(JavaV.DC_MYSQL_PASSWD, "heheave")
+  @transient @volatile var mysqlPool: ComboPooledDataSource = _
 
   init()
 
   def init(): Unit = {
-    val zkClient = new ZkClient(zkHost, zkPort, zkTimeout, new ZkReconnected {
+    initMySql()
+    initZK()
+    sys.addShutdownHook {
+      if (mysqlPool != null) mysqlPool.close()
+      if (zkClient != null) zkClient.close()
+      if (config != null) config.clear()
+    }
+  }
+
+  def initMySql(): Unit = {
+    val mysqlHost = prop.getProperty(JavaV.DC_MYSQL_HOST, "localhost")
+    val mysqlPort = prop.getProperty(JavaV.DC_MYSQL_PORT, "3306").toInt
+    val mysqlDbname = prop.getProperty(JavaV.DC_MYSQL_DBNAME, "device")
+    val mysqlUser = prop.getProperty(JavaV.DC_MYSQL_USER, "root")
+    val mysqlPasswd = prop.getProperty(JavaV.DC_MYSQL_PASSWD, "heheave")
+    mysqlPool = MySQLAccessor.getDataSource(mysqlHost, mysqlPort, mysqlDbname, mysqlUser, mysqlPasswd)
+    loadDataById()
+  }
+
+  def initZK(): Unit = {
+    val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "localhost")
+    val zkPort = prop.getProperty(JavaV.DC_ZK_PORT, "2181").toInt
+    val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
+    val zkWatchPath = prop.getProperty(JavaV.DC_ZK_PATH, "/deviceConfig/change")
+    zkClient = new ZkClient(zkHost, zkPort, zkTimeout, new ZkReconnected {
       override def reconnected(zk: ZooKeeper): Unit = {
         zk.exists(zkWatchPath, new Watcher {
           override def process(watchedEvent: WatchedEvent): Unit = {
-            log.info("-----ZK------" + watchedEvent.getType)
+            val path = watchedEvent.getPath
+            log.info(s"-----RECZK------watch event type: ${watchedEvent.getType} at path ${path}")
             if (watchedEvent.getType == Event.EventType.NodeCreated
               || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-              val info = zk.getData(zkWatchPath, false, null)
-              val id = new String(info).toInt
-              log.info("-----ZK------change at id: " + id)
-              loadDataById(id)
+              val info = zk.getData(path, false, null)
+              if (info != null) {
+                try {
+                  val id = new String(info).toInt
+                  log.info("-----RECZK------change at id: " + id)
+                  loadDataById(id)
+                } catch {
+                  case e: Throwable => log.warn("Could not get id", e)
+                }
+              }
             }
             zk.exists(zkWatchPath, this)
           }
         })
       }
     })
-    loadDataById(0)
+
     val zk = zkClient.zk
     zk.exists(zkWatchPath, new Watcher {
       override def process(watchedEvent: WatchedEvent): Unit = {
-        log.info("-----ZK------" + watchedEvent.getType)
+        val path = watchedEvent.getPath
+        log.info(s"-----ZK------watch event type: ${watchedEvent.getType} at path ${path}")
         if (watchedEvent.getType == Event.EventType.NodeCreated
           || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-          val info = zk.getData(zkWatchPath, false, null)
-          val id = new String(info).toInt
-          log.info("-----ZK------change at id: " + id)
-          loadDataById(id)
+          val info = zk.getData(path, false, null)
+          if (info != null) {
+            try {
+              val id = new String(info).toInt
+              log.info("-----ZK------change at id: " + id)
+              loadDataById(id)
+            } catch {
+              case e: Throwable => log.warn("Could not get id", e)
+            }
+          }
         }
-        zk.exists(zkWatchPath, this)
+        zk.exists(path, this)
       }
     })
-
-    sys.addShutdownHook {
-      zk.close()
-    }
   }
 
   def configMap = config
 
 
-  private def loadDataById(id: Int) = {
+  private def loadDataById(id: Int = 0) = {
     val curId = curIndex.get()
     if (curId >= id) {
       val (did, pidx, action) = readBySingleId(id)
@@ -101,8 +120,9 @@ class DeviceZkConfigMananger(prop: Properties) {
         }
       }
     } else {
-      curIndex.set(id)
-      val res = readByAfterId(id)
+      //curIndex.set(id)
+      val trueId = curId + 1
+      val res = readByAfterId(trueId)
       val iter = res.iterator()
       while (iter.hasNext) {
         val (did, pidx, action) = iter.next()
@@ -112,7 +132,7 @@ class DeviceZkConfigMananger(prop: Properties) {
   }
 
   private def readBySingleId(id: Int): (String, Int, Action) = {
-    val conn = MySQLAccessor.getConnector(mysqlHost, mysqlPort, mysqlDbname, mysqlUser, mysqlPasswd)
+    val conn = mysqlPool.getConnection
     if (conn != null) {
       val pstat = conn.prepareStatement("select did, pidx, cmd, avg, used from deviceConfig where id = ?")
       pstat.setInt(1, id)
@@ -146,7 +166,7 @@ class DeviceZkConfigMananger(prop: Properties) {
   }
 
   private def readByAfterId(id: Int): util.List[(String, Int, Action)] = {
-    val conn = MySQLAccessor.getConnector(mysqlHost, mysqlPort, mysqlDbname, mysqlUser, mysqlPasswd)
+    val conn = mysqlPool.getConnection
     if (conn != null) {
       val pstat = conn.prepareStatement("select id, did, pidx, cmd, avg, used from deviceConfig where id >= ?")
       pstat.setInt(1, id)
@@ -204,18 +224,18 @@ class DeviceZkConfigMananger(prop: Properties) {
   }
 }
 
-class DeviceZkConfigManangerSink(fun: () => DeviceZkConfigMananger) extends Serializable{
+class DeviceConfigManangerSink(fun: () => DeviceConfigMananger) extends Serializable{
 
   private lazy val config = fun()
 
   def configMap = config.configMap
 }
 
-object DeviceZkConfigManangerSink {
-  def apply(prop: Properties): DeviceZkConfigManangerSink  = {
+object DeviceConfigManangerSink {
+  def apply(prop: Properties): DeviceConfigManangerSink  = {
     val f = () => {
-      new DeviceZkConfigMananger(prop)
+      new DeviceConfigMananger(prop)
     }
-    new DeviceZkConfigManangerSink(f)
+    new DeviceConfigManangerSink(f)
   }
 }

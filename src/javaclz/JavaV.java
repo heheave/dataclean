@@ -22,10 +22,12 @@ public class JavaV {
     public static final String KAFKA_REBALANCE_MAX_RETRIES = "sjtumaster.kafka.rebalance.max.retries";
     public static final String KAFKA_REBALANCE_BACKOFF = "sjtumaster.kafka.rebalance.backoff";
     public static final String KAFKA_AUTO_COMMIT_INTERVAL = "sjtumaster.auto.commit.interval";
+    public static final String KAFKA_AUTO_OFFSET_RESET = "sjtumaster.auto.offset.reset";
 
     public static final String SPARKSTREAMING_CLEANED_TOPIC = "sjtumaster.sparkstreaming.cleaned.topic";
+    public static final String SPARKSTREAMING_AVG_TOPIC = "sjtumaster.sparkstreaming.cleaned.topic";
 
-    public static final String DEVICE_CONFIG_PATH = "sjtumaster.device.config.path";
+    public static final String DEVICE_CONFIG_PATH = "sjtumaster.device.deviceconfig.path";
     public static final String DC_ZK_HOST = "sjtumaster.dc.zk.host";
     public static final String DC_ZK_PORT = "sjtumaster.dc.zk.port";
     public static final String DC_ZK_TIMEOUT = "sjtumaster.dc.zk.timout";
@@ -40,9 +42,11 @@ public class JavaV {
     public static final String HDFS_FILE_APPENDED = "sjtumaster.hdfs.file.appended";
 
 
-    public static final String MONGODB_HOST = "sjtumaster.mongo.host";
-    public static final String MONGODB_PORT = "sjtumaster.mongo.port";
-    public static final String MONGODB_DBNAME = "sjtumaster.mongo.dbname";
-    public static final String MONGODB_TBLNAME = "sjtumaster.mongo.tblname";
+    public static final String PERSIST_MONGODB_HOST = "sjtumaster.persist.mongo.host";
+    public static final String PERSIST_MONGODB_PORT = "sjtumaster.persist.mongo.port";
+    public static final String PERSIST_MONGODB_DBNAME = "sjtumaster.persist.mongo.dbname";
+    public static final String PERSIST_MONGODB_REALTIME_TBLNAME = "sjtumaster.persist.mongo.realtime.tblname";
+    public static final String PERSIST_MONGODB_AVG_TBLNAME = "sjtumaster.persist.mongo.avg.tblname";
+    public static final String PERSIST_FILE_DATE_FORMAT = "sjtumaster.persist.file.date.format";
 
 }

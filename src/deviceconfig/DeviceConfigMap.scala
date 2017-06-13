@@ -1,4 +1,4 @@
-package config
+package deviceconfig
 
 import java.util
 
@@ -7,7 +7,7 @@ import action.Action
 /**
   * Created by xiaoke on 17-6-1.
   */
-class Config extends Serializable{
+class DeviceConfigMap extends Serializable{
 
   private val actionsMap = new util.HashMap[String, util.Map[Int, Action]]()
 
@@ -61,7 +61,7 @@ class Config extends Serializable{
     actionsMap.clear()
   }
 
-  def updateByConfig(old: util.HashSet[String], newConfig: Config): Unit = synchronized {
+  def updateByConfig(old: util.HashSet[String], newConfig: DeviceConfigMap): Unit = synchronized {
     if (actionsMap.isEmpty) {
       actionsMap.putAll(newConfig.actionsMap)
     } else {

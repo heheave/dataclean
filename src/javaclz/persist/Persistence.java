@@ -8,7 +8,7 @@ import java.util.Collection;
 public interface Persistence {
 	
 	// persist packets to persistence device
-	public void persistence(PersistenceData pds, final PersistenceOpt popt) throws Exception;
+	void persistence(PersistenceData pds, final PersistenceOpt popt, PersistenceLevel plevel) throws Exception;
 
-	public void persistence(final Collection<PersistenceData> pds, final PersistenceOpt popt) throws Exception;
+	void persistence(final Collection<PersistenceData> pds, final PersistenceOpt popt, PersistenceLevel plevel) throws Exception;
 }

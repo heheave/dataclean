@@ -19,7 +19,10 @@ public class JsonField {
         public static final String VALID="valid";
         public static final String UNIT ="unit";
         public static final String VALUE="value";
+        public static final String SUMV="sum";
+        public static final String NUMV="num";
 
+        public static final String AVGTYPE = "avg";
         public static final String PORTID = "portid";
         public static final String PTIMESTAMP = "ptimestamp";
     }

@@ -5,13 +5,13 @@ import java.util.Map;
 
 public class DbAccessorConf extends PersistenceAccessorConf{
 
-	private final String DB_TYPE_KEY = "ADAPTER_DB_TYPE_RESERVED_KEY";
-	private final String DB_HOST_KEY = "ADAPTER_DB_HOST_RESERVED_KEY";
-	private final String DB_PORT_KEY = "ADAPTER_DB_PORT_RESERVED_KEY";
-	private final String DB_NAME_KEY = "ADAPTER_DB_NAME_RESERVED_KEY";
-	private final String DB_USER_KEY = "ADAPTER_DB_USER_RESERVED_KEY";
-	private final String DB_PASSWARD_KEY = "ADAPTER_DB_PASSWARD_RESERVED_KEY";
-	private final String DB_TABLE_KEY = "ADAPTER_DB_TABLE_RESERVED_KEY";
+	private final String DB_TYPE_KEY = "PERSIST_DB_TYPE_RESERVED_KEY";
+	private final String DB_HOST_KEY = "PERSIST_DB_HOST_RESERVED_KEY";
+	private final String DB_PORT_KEY = "PERSIST_DB_PORT_RESERVED_KEY";
+	private final String DB_NAME_KEY = "PERSIST_DB_NAME_RESERVED_KEY";
+	private final String DB_USER_KEY = "PERSIST_DB_USER_RESERVED_KEY";
+	private final String DB_PASSWARD_KEY = "PERSIST_DB_PASSWARD_RESERVED_KEY";
+	private final String DB_TABLE_KEY = "PERSIST_DB_TABLE_RESERVED_KEY";
 	
 	public DbAccessorConf() {
 		super();

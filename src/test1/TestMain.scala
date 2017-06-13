@@ -9,12 +9,14 @@ import javaclz.persist.data.PersistenceDataJsonWrap
 import javaclz.persist.opt.MongoPersistenceOpt
 import javaclz.zk.ZkClient
 
-import config.DeviceZkConfigMananger
+import deviceconfig.DeviceConfigMananger
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooDefs.Ids
 import org.apache.zookeeper._
+import org.apache.zookeeper.data.Stat
+
 /**
   * Created by xiaoke on 17-6-1.
   */
@@ -111,18 +113,18 @@ object TestMain {
 ////    }
 
 
-//    val deviceZkConfigManager = new DeviceZkConfigMananger(null)
+//    val deviceZkConfigManager = new DeviceConfigMananger(null)
 //    deviceZkConfigManager.init()
 //
-    val zkClient = new ZkClient("localhost", 2181, 2000, null)
-//
-//    var i = 0
-//    log.info("begin")
-    var path = zkClient.zk.exists("/deviceConfig/change", true)
-    if (path == null) {
-      zkClient.zk.create("/deviceConfig/change", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-    }
-    zkClient.zk.setData("/deviceConfig/change", "2".getBytes(), -1)
+
+//////
+//////    var i = 0
+//////    log.info("begin")
+//    var path = zkClient.zk.exists("/deviceConfig/change", true)
+//    if (path == null) {
+//      zkClient.zk.create("/deviceConfig/change", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+//    }
+//    zkClient.zk.setData("/deviceConfig/change", "1".getBytes(), -1)
 //    while (i < 100) {
 //      val data = "datadata" + i
 //
@@ -131,14 +133,33 @@ object TestMain {
 //    log.info("end")
 //    Thread.sleep(3000)
 
-    val zkDec = new DeviceZkConfigMananger(new Properties())
+
+    val zkDec = new DeviceConfigMananger(new Properties())
     val map = zkDec.configMap
-    path = zkClient.zk.exists("/deviceConfig/change", true)
-    if (path == null) {
-      zkClient.zk.create("/deviceConfig/change", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-    }
-    zkClient.zk.setData("/deviceConfig/change", "2".getBytes(), -1)
-    map
-    Thread.sleep(100000)
+
+    new Thread(){
+      override def run()= {
+        try {
+          val zkClient = new ZkClient("localhost", 2181, 2000, null)
+          val path = zkClient.zk.exists("/deviceConfig/change", true)
+          if (path == null) {
+            zkClient.zk.create("/deviceConfig/change", "1".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+          }
+//          var idx = 0
+//          while (idx < 100) {
+//            var stat: Stat = null
+//            while ((stat = zkClient.zk.setData("/deviceConfig/change", ("" + idx).getBytes(), -1)) == null) {}
+//            Thread.sleep(100)
+//            idx += 1
+//          }
+//          println(stat.toString)
+//          while ((stat = zkClient.zk.setData("/deviceConfig/change", "3".getBytes(), -1)) == null){}
+//          println(stat.toString)
+          Thread.sleep(100000)
+        } catch {
+          case e: Throwable =>
+        }
+      }
+    }.start()
   }
 }

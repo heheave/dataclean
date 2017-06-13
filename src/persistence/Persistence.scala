@@ -2,11 +2,14 @@ package persistence
 
 import java.util
 import java.util.Properties
-import javaclz.persist.AdapterPersistence
+import javaclz.persist.{PersistenceLevel, AdapterPersistence}
 import javaclz.persist.data.{PersistenceDataJsonWrap, PersistenceData}
 import javaclz.persist.opt.PersistenceOpt
 
 import net.sf.json.JSONObject
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.hdfs.HdfsConfiguration
+import org.apache.spark.{SparkEnv, SparkContext}
 
 /**
   * Created by xiaoke on 17-6-4.
@@ -17,13 +20,13 @@ class PersistenceSink(fun: () => AdapterPersistence) extends Serializable {
 
   private lazy val persistence = fun()
 
-  def once(pd: PersistenceData, persistenceOpt: PersistenceOpt): Unit = {
-    persistence.persistence(pd, persistenceOpt)
+  def once(pd: PersistenceData, persistenceOpt: PersistenceOpt, pLevel: PersistenceLevel = PersistenceLevel.BOTH): Unit = {
+    persistence.persistence(pd, persistenceOpt, pLevel)
   }
 
-  def batch(pds: util.Collection[PersistenceData], persistenceOpt: PersistenceOpt): Unit = {
+  def batch(pds: util.Collection[PersistenceData], persistenceOpt: PersistenceOpt, pLevel: PersistenceLevel = PersistenceLevel.BOTH): Unit = {
     try {
-      persistence.persistence(pds, persistenceOpt)
+      persistence.persistence(pds, persistenceOpt, pLevel)
     } finally {
       pds.clear()
     }
@@ -34,7 +37,7 @@ class PersistenceSink(fun: () => AdapterPersistence) extends Serializable {
 object PersistenceSink {
   def apply(conf: Properties): PersistenceSink = {
     val f = () => {
-      val pSink = new AdapterPersistence(conf)
+      val pSink = new AdapterPersistence(SparkContext.getOrCreate(SparkEnv.get.conf).hadoopConfiguration, conf)
       pSink.start()
       sys.addShutdownHook{
         pSink.stop()

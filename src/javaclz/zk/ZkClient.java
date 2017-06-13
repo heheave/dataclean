@@ -15,8 +15,6 @@ public class ZkClient {
 
     private static final Logger log = Logger.getLogger(ZkClient.class);
 
-    private static final String idFormat = "%010d";
-
     private CountDownLatch latch = null;
 
     private ZooKeeper zk = null;
@@ -95,6 +93,10 @@ public class ZkClient {
     }
 
     public void close() {
+        if (latch != null) {
+            latch.countDown();
+        }
+
         if (zk != null) {
             try {
                 zk.close();

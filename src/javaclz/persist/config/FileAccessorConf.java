@@ -1,24 +1,34 @@
 package javaclz.persist.config;
 
+import org.apache.hadoop.conf.Configuration;
+
 import java.util.Map;
 
 public class FileAccessorConf extends PersistenceAccessorConf{
 
-	private final String FILE_DATE_FORMATE_KEY = "ADAPTER_FILE_DATE_FORMATE_RESERVED_KEY";
-	
-	public FileAccessorConf() {
+	private static final String FILE_DATE_FORMATE_KEY = "PERSIST_FILE_DATE_FORMATE_RESERVED_KEY";
+
+	private final Configuration configuration;
+
+	public FileAccessorConf(Configuration configuration) {
 		super();
+		this.configuration = configuration;
 	}
 	
-	public FileAccessorConf(Map<String, Object> confs) {
+	public FileAccessorConf(Configuration configuration, Map<String, Object> confs) {
 		super(confs);
+		this.configuration = configuration;
 	}
 	
-	public void setDateFormate(String dbName) {
+	public void setDateFormat(String dbName) {
 		addOrUpdateConf(FILE_DATE_FORMATE_KEY, dbName);
 	}
-	
-	public String getDateFormate() {
+
+	public String getDateFormat() {
 		return getString(FILE_DATE_FORMATE_KEY);
+	}
+
+	public Configuration getConfiguration() {
+		return configuration;
 	}
 }

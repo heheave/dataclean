@@ -1,6 +1,7 @@
 <component name="libraryTable">
-  <library name="commons-beanutils1">
+  <library name="c3p0-0.9.5.2">
     <CLASSES>
+      <root url="jar://$PROJECT_DIR$/jars/c3p0-0.9.5.2.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/commons-beanutils.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/commons-collections-3.2.1.jar!/" />
       <root url="jar://$PROJECT_DIR$/jars/commons-lang.jar!/" />

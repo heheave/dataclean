@@ -6,11 +6,16 @@ public class MongoPersistenceOpt implements PersistenceOpt {
 
 	private final String tableName;
 
-	//private final String
+	private final PersistenceOpt backupOpt;
 
-	public MongoPersistenceOpt(String dbName, String tblName) {
+	public MongoPersistenceOpt(String dbName, String tblName, PersistenceOpt backupOpt) {
 		this.dbName = dbName;
 		this.tableName = tblName;
+		this.backupOpt = backupOpt;
+	}
+
+	public MongoPersistenceOpt(String dbName, String tblName) {
+		this(dbName, tblName, null);
 	}
 
 	// dbName
@@ -39,6 +44,6 @@ public class MongoPersistenceOpt implements PersistenceOpt {
 	}
 
 	public PersistenceOpt backupOpt() {
-		return null;
+		return backupOpt;
 	}
 }
