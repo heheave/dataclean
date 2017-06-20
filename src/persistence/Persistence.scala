@@ -2,14 +2,12 @@ package persistence
 
 import java.util
 import java.util.Properties
+import javaclz.persist.config.HConf
 import javaclz.persist.{PersistenceLevel, AdapterPersistence}
 import javaclz.persist.data.{PersistenceDataJsonWrap, PersistenceData}
 import javaclz.persist.opt.PersistenceOpt
 
 import net.sf.json.JSONObject
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.hdfs.HdfsConfiguration
-import org.apache.spark.{SparkEnv, SparkContext}
 
 /**
   * Created by xiaoke on 17-6-4.
@@ -35,9 +33,9 @@ class PersistenceSink(fun: () => AdapterPersistence) extends Serializable {
 
 
 object PersistenceSink {
-  def apply(conf: Properties): PersistenceSink = {
+  def apply(hconf: HConf, conf: Properties): PersistenceSink = {
     val f = () => {
-      val pSink = new AdapterPersistence(SparkContext.getOrCreate(SparkEnv.get.conf).hadoopConfiguration, conf)
+      val pSink = new AdapterPersistence(hconf.hconf(), conf)
       pSink.start()
       sys.addShutdownHook{
         pSink.stop()

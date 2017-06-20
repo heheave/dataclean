@@ -46,6 +46,7 @@ object SimpleKafkaUtils {
     val kafkaProducerConf = new Properties()
     val serverUrl = conf.getStringOrElse(JavaV.KAFKA_SERVER_URL, "192.168.1.110:9092")
     kafkaProducerConf.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, serverUrl)
+    // kafkaProducerConf.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Int.box(0))
     kafkaProducerConf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
     kafkaProducerConf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer].getName)
     val kafkaSink = KafkaSink(kafkaProducerConf)

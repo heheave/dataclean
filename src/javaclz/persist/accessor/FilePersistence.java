@@ -4,24 +4,33 @@ import javaclz.persist.opt.PersistenceOpt;
 import javaclz.persist.data.PersistenceData;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IOUtils;
+import org.apache.hadoop.io.SequenceFile;
+import org.apache.hadoop.io.WritableUtils;
 import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
-public class FileAccessor implements PersistenceAccessor{
+public class FilePersistence implements Persistence {
 	
-	private static final Logger log = Logger.getLogger(FileAccessor.class);
+	private static final Logger log = Logger.getLogger(FilePersistence.class);
+
+    private static final SimpleDateFormat dbVersionSdf = new SimpleDateFormat("yyyy-MM-dd");
 
 	private final FileSystem fs;
 
 	private final SimpleDateFormat sdf;
 
-	public FileAccessor(Configuration conf, String dateFormat) throws IOException {
+	public FilePersistence(Configuration conf, String dateFormat) throws IOException {
 		sdf = new SimpleDateFormat(dateFormat);
 		if (conf == null) {
 			conf = new Configuration();
@@ -33,16 +42,18 @@ public class FileAccessor implements PersistenceAccessor{
 			throw e;
 		}
 	}
-	
+
+
+
 	@Override
-	public void persistenceOne(PersistenceOpt opt, PersistenceData data)  throws Exception{
+	public synchronized void persistenceOne(PersistenceOpt opt, PersistenceData data)  throws Exception{
 		List<PersistenceData> dataList = new ArrayList<PersistenceData>(1);
 		dataList.add(data);
 		persistenceBatch(opt, dataList);
 	}
 
 	@Override
-	public void persistenceBatch(PersistenceOpt opt, Collection<PersistenceData> data) throws Exception{
+	public synchronized void persistenceBatch(PersistenceOpt opt, Collection<PersistenceData> data) throws Exception{
 		if (data.isEmpty()) {
 			return;
 		}
@@ -51,13 +62,21 @@ public class FileAccessor implements PersistenceAccessor{
 			log.warn("Unspecify file base path, data cannot be persisisted to file but all droped");
 			return;
 		}
-		String dateStr = sdf.format(System.currentTimeMillis());
-		Path filePath = new Path(basePath, dateStr);
+		Path tblPath = new Path(basePath, tblVersion());
+        fs.mkdirs(tblPath);
 		OutputStream dos = null;
 		PrintWriter pw = null;
 		try {
-			dos = fs.create(filePath);
-			log.info("----------FS------------" + fs.exists(filePath) + " : " + filePath.toUri().getPath());
+            Path tryPath = new Path(tblPath, sdf.format(System.currentTimeMillis()));
+            if (isLocal()) {
+                dos = new FileOutputStream(tryPath.toUri().getPath(), true);
+            } else {
+                try {
+                    dos = fs.create(tryPath, false);
+                } catch (IOException ioe) {
+                    dos = fs.append(tryPath);
+                }
+            }
 			pw = new PrintWriter(dos, true);
 			for (PersistenceData pd: data) {
 				if (pd.toJson() != null) {
@@ -77,6 +96,14 @@ public class FileAccessor implements PersistenceAccessor{
 			}
 		}
 	}
+
+	private String tblVersion() {
+        return dbVersionSdf.format(new Date(System.currentTimeMillis()));
+	}
+
+    private boolean isLocal() {
+        return fs instanceof LocalFileSystem;
+    }
 
 	@Override
 	public void close(){

@@ -198,15 +198,9 @@ class DeviceConfigMananger(prop: Properties) {
     }
   }
 
-  private def avgType(avg: String) = avg match {
-    case "DAY" => Actions.AVG_DAY
-    case "HOUR" => Actions.AVG_HOUR
-    case "MIN" => Actions.AVG_MIN
-    case _ => Actions.AVG_NONE
-  }
 
   private def parseLine(cmd: String, avg: String) = {
-    val at = avgType(avg)
+    val at = Actions.getActions(avg)
     val lines = cmd.split(":")
     lines(0) match {
       case "NEG" => NegAction(avg = at)

@@ -1,6 +1,6 @@
 package avgcache
 
-import java.util.concurrent.{TimeUnit, Executors, ConcurrentHashMap}
+import java.util.concurrent._
 
 import org.apache.log4j.Logger
 
@@ -9,7 +9,7 @@ import org.apache.log4j.Logger
   * Created by xiaoke on 17-6-2.
   */
 
-class CacheInfo(btime: String) {
+class CacheInfo(btime: Long) {
 
   private var sumD: Double = 0
 
@@ -26,10 +26,10 @@ class CacheInfo(btime: String) {
 
   def sumNum = sumN
 
-  override def hashCode(): Int = if (beginTime != null) beginTime.hashCode else 0
+  override def hashCode(): Int = (beginTime ^ (beginTime >>> 32)).toInt
 
   override def equals(obj: scala.Any): Boolean = obj match {
-    case o: CacheInfo => beginTime.equals(o.beginTime)
+    case o: CacheInfo => beginTime == beginTime
     case _ => false
   }
 }
@@ -53,32 +53,30 @@ case class CacheKey(d: String, p: Int) {
   }
 }
 
-sealed class AvgCache(avg: Avg) {
+sealed class AvgCacheMap(avg: Avg, fun: Avg => Unit) {
 
   private val log = Logger.getLogger(this.getClass)
 
-  lazy val excutorPool = Executors.newSingleThreadScheduledExecutor()
+  private var scheduledFuture: ScheduledFuture[_] = _
 
   lazy val avgMap = new ConcurrentHashMap[CacheKey, CacheInfo]()
 
-  startCheckRunner()
-
-  private def startCheckRunner(): Unit = {
+  def startCheckRunner(excutorPool: ScheduledExecutorService): Unit = {
     val interval = avg.getInterval()
     log.info("-----------------------------: Begin to startCheckRunner")
-    excutorPool.scheduleAtFixedRate(new Runnable {
+    scheduledFuture = excutorPool.scheduleAtFixedRate(new Runnable {
       override def run(): Unit = {
         val bt = System.currentTimeMillis()
         log.info("-----------------------------: Begin startCheckRunner" + bt)
         try {
           val entryIter = avgMap.entrySet().iterator()
           val curTime = System.currentTimeMillis() - (interval << 1)
-          val curTimeStr = avg.format(curTime)
+          //val curTimeFormated = avg.format(curTime)
           if (entryIter.hasNext) {
             val toRemovedKey = new java.util.HashMap[CacheKey, CacheInfo]()
             while (entryIter.hasNext) {
               val entry = entryIter.next()
-              if (entry.getValue != null && curTimeStr.compareTo(entry.getValue.beginTime) > 0) {
+              if (entry.getValue != null && curTime - entry.getValue.beginTime > 0) {
                  toRemovedKey.put(entry.getKey, entry.getValue)
               }
             }
@@ -92,23 +90,29 @@ sealed class AvgCache(avg: Avg) {
               toRemovedKey.clear()
             }
           }
-
         } catch {
-          case e: Throwable => log.warn("Schedule at " + avg.avgType(), e)
+          case e: Throwable => log.warn("Schedule at " + avg.avgName(), e)
+        }
+        if (avgMap.isEmpty) {
+          fun(avg)
         }
         val et = System.currentTimeMillis()
         log.info("-----------------------------: End startCheckRunner" + (et - bt))
       }
     }, interval, interval << 1, TimeUnit.MILLISECONDS)
-
-    sys.addShutdownHook {
-      log.info("-----------------------------: Stop startCheckRunner")
-      excutorPool.shutdown()
-      avgMap.clear()
-    }
   }
 
-  def avgName = avg.avgType()
+  def close() = {
+    log.info("-----------------------------: Stop startCheckRunner")
+    if (scheduledFuture != null) {
+      scheduledFuture.cancel(false)
+    }
+    avgMap.clear()
+  }
+
+  def avgName = avg.avgName
+
+  def isEmpty = avgMap.isEmpty
 
   def addData(did: String, pidx: Int, timestamp: Long, data: Double): CacheInfo = {
     val key = CacheKey(did, pidx)
@@ -136,33 +140,68 @@ sealed class AvgCache(avg: Avg) {
   }
 }
 
-class AvgCacheTool(fun: () => AvgCache) extends Serializable{
+sealed class AvgCacheManager {
+
+  private val log = Logger.getLogger(this.getClass)
+
+  lazy val excutorPool = Executors.newScheduledThreadPool(1)
+
+  private val cacheMaps = new ConcurrentHashMap[Avg, AvgCacheMap]
+
+  private val closeFun = (avg: Avg) => cacheMaps.synchronized {
+    val getMap = cacheMaps.get(avg)
+    if (getMap != null && getMap.isEmpty) {
+      val removedMap = cacheMaps.remove(avg)
+      if (removedMap != null) {
+        removedMap.close()
+      }
+    }
+  }
+
+  def putData(did: String, pidx: Int, timestamp: Long, data: Double, avg: Avg): CacheInfo = {
+    if (avg != null) {
+      val cacheMap = cacheMaps.get(avg)
+      if (cacheMap == null) {
+        val newCacheMap = new AvgCacheMap(avg, closeFun)
+        val oldCacheMap = cacheMaps.synchronized {
+          cacheMaps.putIfAbsent(avg, newCacheMap)
+        }
+        if (oldCacheMap == null) {
+          log.info("------------ACM-----------Add New Map: " + avg.avgName())
+          newCacheMap.startCheckRunner(excutorPool)
+          newCacheMap.addData(did, pidx, timestamp, data)
+        } else {
+          oldCacheMap.addData(did, pidx, timestamp, data)
+        }
+      } else {
+        cacheMap.addData(did, pidx, timestamp, data)
+      }
+    } else {
+      null
+    }
+  }
+
+  def close(): Unit = {
+    excutorPool.shutdown()
+    cacheMaps.clear()
+  }
+}
+
+class AvgCacheTool(fun: () => AvgCacheManager) extends Serializable{
+
   lazy val avgCache = fun()
 
-  def avgName = avgCache.avgName
-
-  def addData(did: String, pidx: Int, timestamp: Long, data: Double): CacheInfo = avgCache.addData(did, pidx, timestamp, data)
+  def addData(did: String, pidx: Int, timestamp: Long, data: Double, avg: Avg): CacheInfo = avgCache.putData(did, pidx, timestamp, data, avg)
 }
 
 
+
 object AvgCacheManager {
-  def applyHour(): AvgCacheTool = {
+  def apply(): AvgCacheTool = {
     val f = () => {
-      new AvgCache(HourAvg())
-    }
-    new AvgCacheTool(f)
-  }
-
-  def applyMin(): AvgCacheTool = {
-    val f = () => {
-      new AvgCache(MinAvg())
-    }
-    new AvgCacheTool(f)
-  }
-
-  def applyDay(): AvgCacheTool = {
-    val f = () => {
-      new AvgCache(DayAvg())
+      val acm = new AvgCacheManager()
+      sys.addShutdownHook(acm.close())
+      acm
     }
     new AvgCacheTool(f)
   }

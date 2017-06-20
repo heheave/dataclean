@@ -3,42 +3,47 @@ package action
 /**
   * Created by xiaoke on 17-5-31.
   */
+
+import avgcache.Avg
+
 import scala.reflect.runtime.currentMirror
 import scala.tools.reflect.ToolBox
 
 
 trait Action extends Serializable{
-  def avgType(): Int
+
+  def avgType(): Array[Avg]
+
   def transferedV(originV: Double): Double
 }
 
-case class AssAction(ass: Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class AssAction(ass: Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = ass
 }
 
-case class AddAction(addV: Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class AddAction(addV: Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = addV + originV
 }
 
-case class NegAction(avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class NegAction(avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = -originV
 }
 
-case class SubAction(subV: Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class SubAction(subV: Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = subV - originV
 }
 
-case class MulAction(mulV: Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class MulAction(mulV: Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = originV * mulV
 }
 
-case class DivAction(divV: Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class DivAction(divV: Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double =
     if (originV != 0) {
       divV / originV
@@ -47,8 +52,8 @@ case class DivAction(divV: Double, avg: Int = Actions.AVG_NONE) extends Action {
     }
 }
 
-case class RvsAction(avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class RvsAction(avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = if (originV != 0) {
     1 / originV
   } else {
@@ -56,8 +61,8 @@ case class RvsAction(avg: Int = Actions.AVG_NONE) extends Action {
   }
 }
 
-case class ExprAction(expr: Array[Action], avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class ExprAction(expr: Array[Action], avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = {
     var res = originV
     expr.foreach(action => res = action.transferedV(res))
@@ -65,13 +70,13 @@ case class ExprAction(expr: Array[Action], avg: Int = Actions.AVG_NONE) extends 
   }
 }
 
-case class FunAction(fun: (Double) => Double, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class FunAction(fun: (Double) => Double, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = fun(originV)
 }
 
-case class StrAction(str: String, avg: Int = Actions.AVG_NONE) extends Action {
-  override def avgType() = avg
+case class StrAction(str: String, avg: Option[Array[Avg]] = None) extends Action {
+  override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = {
     val toolBox = currentMirror.mkToolBox()
     val tree = toolBox.parse(str.replaceAll("\\$X", originV.toString))

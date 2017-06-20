@@ -10,16 +10,16 @@ import javaclz.persist.config.PersistenceAccessorConf;
 import java.io.IOException;
 import java.util.Arrays;
 
-public class PersistenceAccessorFactory {
+public class PersistenceFactory {
 	
 	public enum DBTYPE{
 		NONE, MONGO, MYSQL, SQLSERVER
 	}
 	
-	private PersistenceAccessorFactory(){}
+	private PersistenceFactory(){}
 	
-	public static PersistenceAccessor getAccessor(PersistenceAccessorConf pac){
-		PersistenceAccessor pa = null;
+	public static Persistence getAccessor(PersistenceAccessorConf pac){
+		Persistence pa = null;
 		if (pac instanceof DbAccessorConf) {
 			DbAccessorConf dac = (DbAccessorConf)pac;
 			DBTYPE dbType = dac.getDbType();
@@ -44,7 +44,7 @@ public class PersistenceAccessorFactory {
 		return pa;
 	}
 	
-	private static MongoAccessor getMongoAccessor(DbAccessorConf dac) {
+	private static MongoPersistence getMongoAccessor(DbAccessorConf dac) {
 		String DB_NAME = dac.getDbName();
 		String DB_USER = dac.getUser();
 		char[] DB_PASSWORD = dac.getPassword();
@@ -57,22 +57,22 @@ public class PersistenceAccessorFactory {
 		ServerAddress serverAddress = new ServerAddress(DB_HOST, DB_PORT);
 		if (DB_USER == null || DB_PASSWORD == null || DB_NAME == null) {
 			MongoClient mc = new MongoClient(serverAddress);
-			return new MongoAccessor(mc);
+			return new MongoPersistence(mc);
 		}
 
 		MongoCredential credential = MongoCredential.createCredential(DB_USER, DB_NAME,
 				DB_PASSWORD);
 		MongoClient mc = new MongoClient(serverAddress, Arrays.asList(credential));
-		return new MongoAccessor(mc);
+		return new MongoPersistence(mc);
 	}
 	
-	private static FileAccessor getFileAccessor(FileAccessorConf fac) {
+	private static FilePersistence getFileAccessor(FileAccessorConf fac) {
 		String DATE_FORMAT = fac.getDateFormat();
 		if (DATE_FORMAT == null) {
 			return null;
 		}
 		try {
-			return new FileAccessor(fac.getConfiguration(), DATE_FORMAT);
+			return new FilePersistence(fac.getConfiguration(), DATE_FORMAT);
 		} catch (IOException e) {
 			e.printStackTrace();
 			return  null;

@@ -1,19 +1,19 @@
 package javaclz.persist;
 
 import javaclz.JavaV;
-import javaclz.persist.accessor.PersistenceAccessor;
-import javaclz.persist.accessor.PersistenceAccessorFactory;
+import javaclz.persist.accessor.Persistence;
+import javaclz.persist.accessor.PersistenceFactory;
 import javaclz.persist.config.DbAccessorConf;
 import javaclz.persist.config.FileAccessorConf;
 import javaclz.persist.data.PersistenceData;
 import javaclz.persist.opt.PersistenceOpt;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.log4j.Logger;
-import javaclz.persist.accessor.PersistenceAccessorFactory.DBTYPE;
+import javaclz.persist.accessor.PersistenceFactory.DBTYPE;
 import java.util.Collection;
 import java.util.Properties;
 
-public class AdapterPersistence implements Persistence {
+public class AdapterPersistence implements javaclz.persist.Persistence {
 
 	private static final Logger log = Logger.getLogger(AdapterPersistence.class);
 
@@ -23,9 +23,9 @@ public class AdapterPersistence implements Persistence {
 
 	private final FileAccessorConf fileConf;
 
-	private PersistenceAccessor dbPa;
+	private Persistence dbPa;
 
-	private PersistenceAccessor filePa;
+	private Persistence filePa;
 
 	public AdapterPersistence(Configuration hconf, Properties conf) {
 		this.conf = conf;
@@ -38,14 +38,16 @@ public class AdapterPersistence implements Persistence {
 		mongDbConf.setDbPort(port);
 		mongDbConf.setDbName(dbname);
 
-		String fileDateFormat = this.conf.getProperty(JavaV.PERSIST_FILE_DATE_FORMAT, "yyyy-MM-dd_HH_mm_ss");
+		//Configuration hconf = new Configuration();
+		String fileDateFormat = this.conf.getProperty(JavaV.PERSIST_FILE_DATE_FORMAT, "yyyy-MM-dd_HH");
+		hconf.setBoolean("dfs.support.append", true);
 		fileConf = new FileAccessorConf(hconf);
 		fileConf.setDateFormat(fileDateFormat);
 	}
 
 	public void start() {
-		dbPa = PersistenceAccessorFactory.getAccessor(mongDbConf);
-		filePa = PersistenceAccessorFactory.getAccessor(fileConf);
+		dbPa = PersistenceFactory.getAccessor(mongDbConf);
+		filePa = PersistenceFactory.getAccessor(fileConf);
 		if (dbPa == null) {
 			log.warn("db persistence accessor init error");
 		}

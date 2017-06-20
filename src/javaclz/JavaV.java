@@ -49,4 +49,9 @@ public class JavaV {
     public static final String PERSIST_MONGODB_AVG_TBLNAME = "sjtumaster.persist.mongo.avg.tblname";
     public static final String PERSIST_FILE_DATE_FORMAT = "sjtumaster.persist.file.date.format";
 
+    public static final String SPARK_SQL_HDFS_BASEPATH = "sjtumaster.spark.sql.hdfs.basepath";
+    public static final String SPARK_SQL_MONGO_BASEPATH = "sjtumaster.spark.sql.mongo.basepath";
+    public static final String SPARK_SQL_MIN_PARTITION = "sjtumaster.spark.sql.min.partition";
+    public static final String SPARK_SQL_TEMP_TBLNAME = "sjtumaster.spark.sql.temp.tblname";
+
 }

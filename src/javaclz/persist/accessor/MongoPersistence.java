@@ -9,17 +9,21 @@ import net.sf.json.JSONObject;
 import org.apache.log4j.Logger;
 import org.bson.Document;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
-public class MongoAccessor implements PersistenceAccessor{
+public class MongoPersistence implements Persistence {
 	
-	private static final Logger log = Logger.getLogger(MongoAccessor.class);
-	
+	private static final Logger log = Logger.getLogger(MongoPersistence.class);
+
+	private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+
 	private MongoClient mc;
 	
-	public MongoAccessor(MongoClient mc) {
+	public MongoPersistence(MongoClient mc) {
 		this.mc = mc;
 	}
 	
@@ -44,9 +48,9 @@ public class MongoAccessor implements PersistenceAccessor{
 			return;
 		}
 		MongoDatabase md = mc.getDatabase(dbName);
-		log.info(dbName);
-		MongoCollection<Document> collection = md.getCollection(tblName);
-		log.info(tblName);
+		// log.info(dbName);
+		MongoCollection<Document> collection = md.getCollection(String.format("%s_%s", tblName, tblVersion()));
+		// log.info(tblName);
 		List<Document> listDocuments = new ArrayList<Document>();
 		for (PersistenceData pd: data) {
 			Document d = getDocument(pd.toJson());
@@ -59,22 +63,15 @@ public class MongoAccessor implements PersistenceAccessor{
 			listDocuments.clear();
 		}
 	}
-	
+
+	private String tblVersion() {
+		return sdf.format(new Date(System.currentTimeMillis()));
+	}
+
 	private Document getDocument(JSONObject jo) {
 		if (jo == null) {
 			return null;
 		}
-//		Document result = new Document();
-//		@SuppressWarnings("unchecked")
-//		Set<Entry<String, Object>> entries = jo.entrySet();
-//		for (Entry<String, Object> entry : entries) {
-//			String key = entry.getKey();
-//			Object value = entry.getValue();
-//			if (value instanceof JSONObject) {
-//				value = getDocument((JSONObject) value);
-//			}
-//			result.append(key, value);
-//		}
 		return Document.parse(jo.toString());
 	}
 	

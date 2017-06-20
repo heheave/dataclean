@@ -1,84 +1,37 @@
 package avgcache
 
-import java.text.SimpleDateFormat
-import java.util.Date
 
 /**
   * Created by xiaoke on 17-6-2.
   */
-trait Avg {
+sealed case class Avg(at: String, interval: Long) {
 
-  def avgType(): String
+  def avgName(): String = at
 
-  def format(timestamp: Long): String
+  def format(timestamp: Long): Long = timestamp / interval * interval
 
-  def getInterval(): Long
-}
+  def getInterval(): Long = interval
 
-sealed class DayAvg() extends Avg {
-
-  override def avgType = DayAvg.avgType
-
-  override def format(timestamp: Long): String = {
-    DayAvg.format.format(new Date(timestamp))
+  override def equals(obj: scala.Any): Boolean = obj match {
+    case avg: Avg => {
+      interval == avg.getInterval()
+    }
+    case _ => false
   }
 
-  override def getInterval(): Long = DayAvg.interval
+  override def hashCode(): Int = (interval ^ (interval >>> 32)).toInt
 }
 
-object DayAvg {
+object AvgFactory {
 
-  private val avgType = "DAY"
+  val dayAvg = Avg("DAY", 24* 60 * 60 * 1000)
 
-  private val interval = 24* 60 * 60 * 1000
+  val hourAvg = Avg("HOUR", 60 * 60 * 1000)
 
-  private val format = new SimpleDateFormat("yyyy_MM_dd")
+  val minAvg = Avg("MIN", 60 * 1000)
 
-  def apply() = new HourAvg()
+  def otherAvg(interval: Long) = Avg("INTERVAL%s".format(interval), interval)
 }
 
-sealed class HourAvg() extends Avg {
-
-  override def avgType = HourAvg.avgType
-
-  override def format(timestamp: Long): String = {
-      HourAvg.format.format(new Date(timestamp))
-  }
-
-  override def getInterval(): Long = HourAvg.interval
-}
-
-object HourAvg {
-
-  private val avgType = "HOUR"
-
-  private val interval = 60 * 60 * 1000
-
-  private val format = new SimpleDateFormat("yyyy_MM_dd_HH")
-
-  def apply() = new HourAvg()
-}
-
-sealed class MinAvg() extends Avg {
-
-  override def avgType = MinAvg.avgType
-
-  override def format(timestamp: Long): String = {
-    MinAvg.format.format(new Date(timestamp))
-  }
-
-  override def getInterval(): Long = MinAvg.interval
-}
-
-object MinAvg {
-
-  private val avgType = "MIN"
-
-  private val interval = 60 * 1000
-
-  private val format = new SimpleDateFormat("yyyy_MM_dd_HH_mm")
-
-  def apply() = new MinAvg()
-}
 
 

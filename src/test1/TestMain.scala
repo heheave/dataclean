@@ -2,7 +2,7 @@ package test1
 
 import java.io.IOException
 import java.util.Properties
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent._
 import javaclz.JavaV
 import javaclz.mysql.MySQLAccessor
 import javaclz.persist.data.PersistenceDataJsonWrap
@@ -134,32 +134,33 @@ object TestMain {
 //    Thread.sleep(3000)
 
 
-    val zkDec = new DeviceConfigMananger(new Properties())
-    val map = zkDec.configMap
-
-    new Thread(){
-      override def run()= {
-        try {
-          val zkClient = new ZkClient("localhost", 2181, 2000, null)
-          val path = zkClient.zk.exists("/deviceConfig/change", true)
-          if (path == null) {
-            zkClient.zk.create("/deviceConfig/change", "1".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-          }
-//          var idx = 0
-//          while (idx < 100) {
-//            var stat: Stat = null
-//            while ((stat = zkClient.zk.setData("/deviceConfig/change", ("" + idx).getBytes(), -1)) == null) {}
-//            Thread.sleep(100)
-//            idx += 1
+//    val zkDec = new DeviceConfigMananger(new Properties())
+//    val map = zkDec.configMap
+//
+//    new Thread(){
+//      override def run()= {
+//        try {
+//          val zkClient = new ZkClient("localhost", 2181, 2000, null)
+//          val path = zkClient.zk.exists("/deviceConfig/change", true)
+//          if (path == null) {
+//            zkClient.zk.create("/deviceConfig/change", "1".getBytes(), Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
 //          }
-//          println(stat.toString)
-//          while ((stat = zkClient.zk.setData("/deviceConfig/change", "3".getBytes(), -1)) == null){}
-//          println(stat.toString)
-          Thread.sleep(100000)
-        } catch {
-          case e: Throwable =>
-        }
-      }
-    }.start()
+////          var idx = 0
+////          while (idx < 100) {
+////            var stat: Stat = null
+////            while ((stat = zkClient.zk.setData("/deviceConfig/change", ("" + idx).getBytes(), -1)) == null) {}
+////            Thread.sleep(100)
+////            idx += 1
+////          }
+////          println(stat.toString)
+////          while ((stat = zkClient.zk.setData("/deviceConfig/change", "3".getBytes(), -1)) == null){}
+////          println(stat.toString)
+//          Thread.sleep(100000)
+//        } catch {
+//          case e: Throwable =>
+//        }
+//      }
+//    }.start()
+
   }
 }

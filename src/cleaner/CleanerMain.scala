@@ -4,13 +4,14 @@ import _root_.java.io.{File, FileOutputStream, PrintWriter}
 import java.util
 import java.util.Properties
 import javaclz.persist.PersistenceLevel
+import javaclz.persist.config.HConf
 import javaclz.persist.data.{PersistenceDataJsonWrap, PersistenceData}
 import javaclz.persist.opt.{FilePersistenceOpt, MongoPersistenceOpt}
 import javaclz.{JsonField, JavaConfigure, JavaV}
 
 import _root_.util.AvgPersistenceUtil
 import action.{Actions}
-import avgcache.{AvgCacheManager}
+import avgcache.{AvgFactory, AvgCacheManager}
 
 import deviceconfig.{DeviceConfigManangerSink}
 import kafka.{SimpleKafkaUtils}
@@ -20,6 +21,7 @@ import org.apache.spark.{SparkConf}
 
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import persistence.PersistenceSink
+import sql.SqlJobMnager
 
 
 /**
@@ -35,7 +37,7 @@ object CleanerMain {
     val conf = new JavaConfigure()
     conf.readFromXml()
     val deployUrl = if (conf.getString(JavaV.MASTER_HOST) == null) {
-        "local[2]"
+        "local[4]"
     } else {
       "spark://%s:7077".format(conf.getString(JavaV.MASTER_HOST))
     }
@@ -47,6 +49,9 @@ object CleanerMain {
 
     val streamingContext = new StreamingContext(sparkConf, Seconds(interval / 1000))
 
+    val jobSqlManager = new SqlJobMnager(streamingContext.sparkContext, conf)
+    jobSqlManager.start()
+
     val realtimeTopic = conf.getStringOrElse(JavaV.SPARKSTREAMING_CLEANED_TOPIC, "cleaned-data-topic")
     val avgDataTopic = conf.getStringOrElse(JavaV.SPARKSTREAMING_AVG_TOPIC, "cleaned-avg-topic")
     val kafkaProducerBroadcast = {
@@ -56,7 +61,7 @@ object CleanerMain {
 
     val avgCacheBroadcast = {
       streamingContext.sparkContext.broadcast(
-      AvgCacheManager.applyDay(), AvgCacheManager.applyHour(), AvgCacheManager.applyMin())
+      AvgCacheManager())
     }
 
     val dbname = conf.getStringOrElse(JavaV.PERSIST_MONGODB_DBNAME, "device")
@@ -85,7 +90,8 @@ object CleanerMain {
       val dbport = conf.getString(JavaV.PERSIST_MONGODB_PORT)
       if (dbport != null) properties.put(JavaV.PERSIST_MONGODB_PORT, dbport)
       if (dbname != null) properties.put(JavaV.PERSIST_MONGODB_DBNAME, dbname)
-      val persistenceSink = PersistenceSink(properties)
+      val hconf = new HConf(streamingContext.sparkContext.hadoopConfiguration)
+      val persistenceSink = PersistenceSink(hconf, properties)
       streamingContext.sparkContext.broadcast(persistenceSink)
     }
 
@@ -110,12 +116,13 @@ object CleanerMain {
       rdd.foreachPartition(iter => {
         if (iter.hasNext) {
           val producer = kafkaProducerBroadcast.value
-          val dayAvgCache = avgCacheBroadcast.value._1
-          val hourAvgCache = avgCacheBroadcast.value._2
-          val minAvgCache = avgCacheBroadcast.value._3
+          log.info("------------B producer------------")
+          val avgCacheManager = avgCacheBroadcast.value
+          log.info("------------B avgCacheManager------------")
           val persistence = persistenceBroadcast.value
+          log.info("------------B persistence------------")
           val configMap = deviceConfigBroadcast.value.configMap
-
+          log.info("------------B configMap------------")
           implicit val jsonToPd = (jo: JSONObject) => new PersistenceDataJsonWrap(jo)
           val realtimeObjs = new util.LinkedList[PersistenceData]()
           val avgObjs = new util.LinkedList[PersistenceData]()
@@ -139,39 +146,50 @@ object CleanerMain {
                 val transferedV = action.transferedV(Actions.objToDouble(value))
                 valueJson.put(JsonField.DeviceValue.VALUE, transferedV)
                 //log.info("------------xxxxxxxxxx---" + (action.avgType & Actions.AVG_MIN))
-                if ((action.avgType & Actions.AVG_MIN) != 0) {
-                  //log.info("------------xxxxxxxxxx---" + minAvgCache.avgCache.avgMap.keys())
-                  val info = minAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-                  if (info != null) {
-                    log.info("----------AVG_MIN-------------: " + info.sumData + "---------" + info.sumNum)
-                    val minAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-                    avgObjs.add(minAvgObj)
-                    producer.send(avgDataTopic, minAvgObj.toString)
+                val avgs = action.avgType()
+                avgs.foreach(avg => {
+                  val cinfo = avgCacheManager.addData(id, portIdx, ptimeStamp, transferedV, avg)
+                  if (cinfo != null) {
+                    val avgObj = AvgPersistenceUtil.avgPersistenceObj(id, portIdx, avg.avgName(),
+                      dTimeStamp, ptimeStamp, cinfo.sumData, cinfo.sumNum)
+                    avgObjs.add(avgObj)
+                    producer.send(avgDataTopic, avgObj.toString)
                   }
-                }
+                })
 
-                if ((action.avgType & Actions.AVG_HOUR) != 0) {
-                  val info = hourAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-                  if (info != null) {
-                    log.info("----------AVG_HOUR-------------: " + info.sumData + "---------" + info.sumNum)
-                    val hourAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-                    avgObjs.add(hourAvgObj)
-                    producer.send(avgDataTopic, hourAvgObj.toString)
-                  }
-                }
-
-                if ((action.avgType() & Actions.AVG_DAY) != 0) {
-                  val info = dayAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-                  if (info != null) {
-                    log.info("----------AVG_DAY-------------: " + info.sumData + "---------" + info.sumNum)
-                    val dayAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-                    avgObjs.add(dayAvgObj)
-                    producer.send(avgDataTopic, dayAvgObj.toString)
-                  }
-                }
+//                if (action.avgType != null) {
+//                  //log.info("------------xxxxxxxxxx---" + minAvgCache.avgCache.avgMap.keys())
+//                  val info = minAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
+//                  if (info != null) {
+//                    log.info("----------AVG_MIN-------------: " + info.sumData + "---------" + info.sumNum)
+//                    val minAvgObj = AvgPersistenceUtil.avgPersistenceObj(
+//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
+//                    avgObjs.add(minAvgObj)
+//                    producer.send(avgDataTopic, minAvgObj.toString)
+//                  }
+//                }
+//
+//                if ((action.avgType & Actions.AVG_HOUR) != 0) {
+//                  val info = hourAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
+//                  if (info != null) {
+//                    log.info("----------AVG_HOUR-------------: " + info.sumData + "---------" + info.sumNum)
+//                    val hourAvgObj = AvgPersistenceUtil.avgPersistenceObj(
+//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
+//                    avgObjs.add(hourAvgObj)
+//                    producer.send(avgDataTopic, hourAvgObj.toString)
+//                  }
+//                }
+//
+//                if ((action.avgType() & Actions.AVG_DAY) != 0) {
+//                  val info = dayAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
+//                  if (info != null) {
+//                    log.info("----------AVG_DAY-------------: " + info.sumData + "---------" + info.sumNum)
+//                    val dayAvgObj = AvgPersistenceUtil.avgPersistenceObj(
+//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
+//                    avgObjs.add(dayAvgObj)
+//                    producer.send(avgDataTopic, dayAvgObj.toString)
+//                  }
+//                }
               }
               //printer.println(valueJson.toString())
               portIdx += 1
@@ -185,7 +203,7 @@ object CleanerMain {
 
           }
           log.info("---------------------AVG----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
-          persistence.batch(realtimeObjs, realtimePersistOpt)
+          persistence.batch(realtimeObjs, realtimePersistOpt, PersistenceLevel.BOTH)
           log.info("---------------------AVG----------------" + avgObjs.size() + avgPersistOpt.getStr1 + avgPersistOpt.getStr2)
           persistence.batch(avgObjs, avgPersistOpt)
           //printer.close()
@@ -197,5 +215,6 @@ object CleanerMain {
     })
     streamingContext.start()
     streamingContext.awaitTermination()
+    jobSqlManager.stop()
   }
 }

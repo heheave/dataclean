@@ -1,6 +1,6 @@
 package javaclz.persist.config;
 
-import javaclz.persist.accessor.PersistenceAccessorFactory.DBTYPE;
+import javaclz.persist.accessor.PersistenceFactory.DBTYPE;
 import java.util.Map;
 
 public class DbAccessorConf extends PersistenceAccessorConf{
