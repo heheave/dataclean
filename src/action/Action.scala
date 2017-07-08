@@ -4,6 +4,7 @@ package action
   * Created by xiaoke on 17-5-31.
   */
 
+import action.expression.ExprUtil
 import avgcache.Avg
 
 import scala.reflect.runtime.currentMirror
@@ -70,6 +71,13 @@ case class ExprAction(expr: Array[Action], avg: Option[Array[Avg]] = None) exten
   }
 }
 
+case class Expr1Action(str: String, avg: Option[Array[Avg]] = None) extends Action {
+  private val expr = ExprUtil.fromString(str, Actions.XMARK)
+  override def avgType(): Array[Avg] = avg.getOrElse(null)
+  override def transferedV(originV: Double): Double =
+    if (expr != null) expr.compute(originV) else originV
+}
+
 case class FunAction(fun: (Double) => Double, avg: Option[Array[Avg]] = None) extends Action {
   override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = fun(originV)
@@ -79,7 +87,7 @@ case class StrAction(str: String, avg: Option[Array[Avg]] = None) extends Action
   override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = {
     val toolBox = currentMirror.mkToolBox()
-    val tree = toolBox.parse(str.replaceAll("\\$X", originV.toString))
+    val tree = toolBox.parse(str.replaceAll(String.valueOf(Actions.XMARK), originV.toString))
     val res = toolBox.eval(tree).asInstanceOf[Double]
     res
   }

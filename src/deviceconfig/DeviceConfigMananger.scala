@@ -12,15 +12,14 @@ import javaclz.JavaV
 import action._
 import com.mchange.v2.c3p0.ComboPooledDataSource
 import org.apache.log4j.Logger
+import org.apache.spark.Logging
 import org.apache.zookeeper.Watcher.Event
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
 /**
   * Created by xiaoke on 17-6-4.
   */
-class DeviceConfigMananger(prop: Properties) {
-
-  private val log = Logger.getLogger(this.getClass)
+class DeviceConfigMananger(prop: Properties) extends Logging{
 
   @transient private val curIndex = new AtomicInteger(-1)
 
@@ -43,7 +42,7 @@ class DeviceConfigMananger(prop: Properties) {
   }
 
   def initMySql(): Unit = {
-    val mysqlHost = prop.getProperty(JavaV.DC_MYSQL_HOST, "localhost")
+    val mysqlHost = prop.getProperty(JavaV.DC_MYSQL_HOST, "192.168.1.110")
     val mysqlPort = prop.getProperty(JavaV.DC_MYSQL_PORT, "3306").toInt
     val mysqlDbname = prop.getProperty(JavaV.DC_MYSQL_DBNAME, "device")
     val mysqlUser = prop.getProperty(JavaV.DC_MYSQL_USER, "root")
@@ -53,7 +52,7 @@ class DeviceConfigMananger(prop: Properties) {
   }
 
   def initZK(): Unit = {
-    val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "localhost")
+    val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "192.168.1.110")
     val zkPort = prop.getProperty(JavaV.DC_ZK_PORT, "2181").toInt
     val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
     val zkWatchPath = prop.getProperty(JavaV.DC_ZK_PATH, "/deviceConfig/change")

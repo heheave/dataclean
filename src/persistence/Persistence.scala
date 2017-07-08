@@ -8,11 +8,12 @@ import javaclz.persist.data.{PersistenceDataJsonWrap, PersistenceData}
 import javaclz.persist.opt.PersistenceOpt
 
 import net.sf.json.JSONObject
+import org.apache.spark.Logging
 
 /**
   * Created by xiaoke on 17-6-4.
   */
-class PersistenceSink(fun: () => AdapterPersistence) extends Serializable {
+class PersistenceSink(fun: () => AdapterPersistence) extends Serializable with Logging{
 
   private lazy implicit val joToPd = (jo: JSONObject) => new PersistenceDataJsonWrap(jo)
 
@@ -25,6 +26,8 @@ class PersistenceSink(fun: () => AdapterPersistence) extends Serializable {
   def batch(pds: util.Collection[PersistenceData], persistenceOpt: PersistenceOpt, pLevel: PersistenceLevel = PersistenceLevel.BOTH): Unit = {
     try {
       persistence.persistence(pds, persistenceOpt, pLevel)
+    } catch {
+      case e: Throwable => log.warn("Persistence error", e)
     } finally {
       pds.clear()
     }

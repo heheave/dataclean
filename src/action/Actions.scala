@@ -7,36 +7,41 @@ import avgcache.{Avg, AvgFactory}
   */
 object Actions {
 
-  val AVG_NONE = Array[Avg](null)
+  val XMARK = 'X'
+
   val AVG_HOUR = Array(AvgFactory.hourAvg)
   val AVG_MIN = Array(AvgFactory.minAvg)
   val AVG_DAY = Array(AvgFactory.dayAvg)
 
   def getActions(avgStr: String): Option[Array[Avg]] = {
-    val avgs = avgStr.split(":")
-    val result = new Array[Avg](avgs.length)
-    var idx = 0
-    while (idx < avgs.length) {
-      val avg = avgs(idx) match {
-        case "MIN" => AvgFactory.minAvg
-        case "HOUR" => AvgFactory.hourAvg
-        case "DAY" => AvgFactory.dayAvg
-        case _ => {
-          try {
-            AvgFactory.otherAvg(avgs(idx).toLong)
-          } catch {
-            case e: Throwable => null
-          }
-        }
-      }
-      result(idx) = avg
-      idx += 1
-    }
-    result.filter(_!=null)
-    if (result.length < 1) {
+    if(avgStr == null) {
       None
     } else {
-      Some(result)
+      val avgs = avgStr.split(":")
+      val result = new Array[Avg](avgs.length)
+      var idx = 0
+      while (idx < avgs.length) {
+        val avg = avgs(idx) match {
+          case "MIN" => AvgFactory.minAvg
+          case "HOUR" => AvgFactory.hourAvg
+          case "DAY" => AvgFactory.dayAvg
+          case _ => {
+            try {
+              AvgFactory.otherAvg(avgs(idx).toLong)
+            } catch {
+              case e: Throwable => null
+            }
+          }
+        }
+        result(idx) = avg
+        idx += 1
+      }
+      result.filter(_!=null)
+      if (result.length < 1) {
+        None
+      } else {
+        Some(result)
+      }
     }
   }
 

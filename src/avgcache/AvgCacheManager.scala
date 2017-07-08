@@ -3,6 +3,7 @@ package avgcache
 import java.util.concurrent._
 
 import org.apache.log4j.Logger
+import org.apache.spark.Logging
 
 
 /**
@@ -53,9 +54,7 @@ case class CacheKey(d: String, p: Int) {
   }
 }
 
-sealed class AvgCacheMap(avg: Avg, fun: Avg => Unit) {
-
-  private val log = Logger.getLogger(this.getClass)
+sealed class AvgCacheMap(avg: Avg, fun: Avg => Unit) extends Logging{
 
   private var scheduledFuture: ScheduledFuture[_] = _
 
@@ -140,9 +139,7 @@ sealed class AvgCacheMap(avg: Avg, fun: Avg => Unit) {
   }
 }
 
-sealed class AvgCacheManager {
-
-  private val log = Logger.getLogger(this.getClass)
+sealed class AvgCacheManager extends Logging{
 
   lazy val excutorPool = Executors.newScheduledThreadPool(1)
 

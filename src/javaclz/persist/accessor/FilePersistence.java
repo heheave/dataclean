@@ -6,10 +6,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.IOUtils;
-import org.apache.hadoop.io.SequenceFile;
-import org.apache.hadoop.io.WritableUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.text.SimpleDateFormat;
@@ -17,12 +15,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 
-public class FilePersistence implements Persistence {
+public class FilePersistence implements ModulePersistence {
 	
-	private static final Logger log = Logger.getLogger(FilePersistence.class);
+	private static final Logger log = LoggerFactory.getLogger(MongoPersistence.class);
 
     private static final SimpleDateFormat dbVersionSdf = new SimpleDateFormat("yyyy-MM-dd");
 

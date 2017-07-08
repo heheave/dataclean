@@ -1,10 +1,11 @@
 package kafka
 
-import java.util.Properties
+import java.util.{UUID, Properties}
 import javaclz.{JavaV, JavaConfigure}
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.streaming.kafka.KafkaUtils
 import kafka.serializer.StringDecoder
 import org.apache.spark.streaming.StreamingContext
@@ -34,12 +35,16 @@ object SimpleKafkaUtils {
       // 序列化类
       //"serializer.class" -> "kafka.serializer.StringEncoder"
     )
-    val topic = Set[String](conf.getStringOrElse(JavaV.KAFKA_TOPIC, "devicegate-topic"))
-    val kafkaStream = KafkaUtils.createDirectStream[String, String, StringDecoder , StringDecoder](streamingContext, props, topic)
-    sys.addShutdownHook({
-      kafkaStream.stop()
+    val topic = Map[String, Int](conf.getStringOrElse(JavaV.KAFKA_TOPIC, "devicegate-topic") -> 1)
+    val parilizeNum = conf.getIntOrElse(JavaV.KAFKA_PARALLELISM_NUM, 5)
+    val kafkaStreams = (1 to parilizeNum).map(i => {
+      val stream = KafkaUtils.createStream[String, String, StringDecoder, StringDecoder](
+        streamingContext, props, topic, StorageLevel.MEMORY_ONLY)
+      sys.addShutdownHook(stream.stop())
+      stream
     })
-    kafkaStream
+    val unionedStream = streamingContext.union(kafkaStreams)
+    unionedStream//.repartition(parilizeNum)
   }
 
   def getKafkaSink(conf: JavaConfigure) = {

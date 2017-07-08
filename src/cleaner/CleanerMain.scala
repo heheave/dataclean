@@ -3,6 +3,7 @@ package cleaner
 import _root_.java.io.{File, FileOutputStream, PrintWriter}
 import java.util
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicLong
 import javaclz.persist.PersistenceLevel
 import javaclz.persist.config.HConf
 import javaclz.persist.data.{PersistenceDataJsonWrap, PersistenceData}
@@ -17,7 +18,8 @@ import deviceconfig.{DeviceConfigManangerSink}
 import kafka.{SimpleKafkaUtils}
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
-import org.apache.spark.{SparkConf}
+import org.apache.spark.streaming.scheduler.{StreamingListenerBatchStarted, StreamingListenerBatchCompleted, StreamingListenerReceiverStarted, StreamingListener}
+import org.apache.spark.{Logging, SparkConf}
 
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import persistence.PersistenceSink
@@ -27,13 +29,13 @@ import sql.SqlJobMnager
 /**
   * Created by xiaoke on 17-5-20.
   */
-object CleanerMain {
+object CleanerMain extends Logging{
 
-  private val log = Logger.getLogger(CleanerMain.getClass)
+  //private val log = Logger.getLogger(CleanerMain.getClass)
 
   def main(args: Array[String]): Unit = {
     PropertyConfigurator.configure(JavaV.LOG_PATH)
-    val file = new File(JavaV.LOG_PATH)
+    //val file = new File(JavaV.LOG_PATH)
     val conf = new JavaConfigure()
     conf.readFromXml()
     val deployUrl = if (conf.getString(JavaV.MASTER_HOST) == null) {
@@ -44,10 +46,14 @@ object CleanerMain {
     log.info("Spark deploy url is: " + deployUrl)
     val interval = conf.getLongOrElse(JavaV.STREAMING_TIME_INTERVAL, 10000)
     val sparkConf = new SparkConf()
-    sparkConf.setAppName("Clear Main")
+    sparkConf.setAppName("Cleaner")
       .setMaster(deployUrl)
+      // Can this make a difference ???
+      .set("spark.streaming.unpersist", "true")
 
     val streamingContext = new StreamingContext(sparkConf, Seconds(interval / 1000))
+
+    val mesAccumulator = streamingContext.sparkContext.accumulator(0)
 
     val jobSqlManager = new SqlJobMnager(streamingContext.sparkContext, conf)
     jobSqlManager.start()
@@ -66,11 +72,11 @@ object CleanerMain {
 
     val dbname = conf.getStringOrElse(JavaV.PERSIST_MONGODB_DBNAME, "device")
     val realtimeTblName = conf.getStringOrElse(JavaV.PERSIST_MONGODB_REALTIME_TBLNAME, "realtime")
-    val fileRealtimeBasePath = conf.getStringOrElse("xxxxx", "file:///tmp/rdd/realtime/")
+    val fileRealtimeBasePath = conf.getStringOrElse(JavaV.PERSIST_FILE_REALTIME_BASEPATH, "file:///tmp/rdd/realtime/")
 
     //TODO store the avg info in a same table
     val minAvgTblName = conf.getStringOrElse(JavaV.PERSIST_MONGODB_AVG_TBLNAME, "avgdata")
-    val fileAvgBasePath = conf.getStringOrElse("xxxxx", "file:///tmp/rdd/avg/")
+    val fileAvgBasePath = conf.getStringOrElse(JavaV.PERSIST_FILE_AVG_BASEPATH, "file:///tmp/rdd/avg/")
 
 //    val hourAvgTblName = conf.getStringOrElse(JavaV.MONGODB_TBLNAME, "houravg")
 //    val mongoHourAvgPersistence = new MongoPersistenceOpt(dbname, hourAvgTblName)
@@ -90,6 +96,8 @@ object CleanerMain {
       val dbport = conf.getString(JavaV.PERSIST_MONGODB_PORT)
       if (dbport != null) properties.put(JavaV.PERSIST_MONGODB_PORT, dbport)
       if (dbname != null) properties.put(JavaV.PERSIST_MONGODB_DBNAME, dbname)
+      val timeout = conf.getStringOrElse(JavaV.PERSIST_MONGODB_DBNAME, "1000")
+      properties.put(JavaV.PERSIST_MONGODB_DBNAME, timeout)
       val hconf = new HConf(streamingContext.sparkContext.hadoopConfiguration)
       val persistenceSink = PersistenceSink(hconf, properties)
       streamingContext.sparkContext.broadcast(persistenceSink)
@@ -97,32 +105,35 @@ object CleanerMain {
 
     val kafkaStream = SimpleKafkaUtils.getStream(streamingContext, conf)
 
-//    streamingContext.addStreamingListener(new StreamingListener {
-//      override def onBatchSubmitted(batchSubmitted: StreamingListenerBatchSubmitted): Unit = {
-//        log.info("batch submitted --------------------------")
-//        if (deviceConfigBroadcast != null) {
-//          deviceConfigBroadcast.unpersist()
-//        }
-//        deviceConfigBroadcast = {
-//          val configMap = DeviceConfigManager(conf).configFromPath()
-//          //configMap.append("ANALOG-A01A244", -1, MulAction(0))
-//          streamingContext.sparkContext.broadcast(configMap)
-//        }
-//        log.info("rebroadcast deviceConfigBroadcast --------------------------")
-//      }
-//    })
+    streamingContext.addStreamingListener(new StreamingListener {
+
+
+      override def onBatchStarted(batchStarted: StreamingListenerBatchStarted): Unit = {
+        val batchInfo = batchStarted.batchInfo
+        log.info("***Batch started, " + batchInfo.numRecords)
+      }
+
+      override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted): Unit = {
+        val batchInfo = batchCompleted.batchInfo
+        log.info("***Batch completed, " + batchInfo.batchTime + "SD: " + batchInfo.schedulingDelay.get
+          + ", PD: " + batchInfo.processingDelay + ", TD: " + batchInfo.totalDelay
+        )
+        log.info(s"For now total ${mesAccumulator.value} messages has been tackled")
+      }
+    })
 
     kafkaStream.foreachRDD(rdd => {
       rdd.foreachPartition(iter => {
+        val beginTime = System.currentTimeMillis()
         if (iter.hasNext) {
           val producer = kafkaProducerBroadcast.value
-          log.info("------------B producer------------")
+          //log.info("------------B producer------------")
           val avgCacheManager = avgCacheBroadcast.value
-          log.info("------------B avgCacheManager------------")
+          //log.info("------------B avgCacheManager------------")
           val persistence = persistenceBroadcast.value
-          log.info("------------B persistence------------")
+          //log.info("------------B persistence------------")
           val configMap = deviceConfigBroadcast.value.configMap
-          log.info("------------B configMap------------")
+          //log.info("------------B configMap------------")
           implicit val jsonToPd = (jo: JSONObject) => new PersistenceDataJsonWrap(jo)
           val realtimeObjs = new util.LinkedList[PersistenceData]()
           val avgObjs = new util.LinkedList[PersistenceData]()
@@ -145,51 +156,18 @@ object CleanerMain {
                 log.info("id: " + id + ", action: " + action.getClass.getName + ", type: " + action.avgType())
                 val transferedV = action.transferedV(Actions.objToDouble(value))
                 valueJson.put(JsonField.DeviceValue.VALUE, transferedV)
-                //log.info("------------xxxxxxxxxx---" + (action.avgType & Actions.AVG_MIN))
                 val avgs = action.avgType()
-                avgs.foreach(avg => {
-                  val cinfo = avgCacheManager.addData(id, portIdx, ptimeStamp, transferedV, avg)
-                  if (cinfo != null) {
-                    val avgObj = AvgPersistenceUtil.avgPersistenceObj(id, portIdx, avg.avgName(),
-                      dTimeStamp, ptimeStamp, cinfo.sumData, cinfo.sumNum)
-                    avgObjs.add(avgObj)
-                    producer.send(avgDataTopic, avgObj.toString)
-                  }
-                })
-
-//                if (action.avgType != null) {
-//                  //log.info("------------xxxxxxxxxx---" + minAvgCache.avgCache.avgMap.keys())
-//                  val info = minAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-//                  if (info != null) {
-//                    log.info("----------AVG_MIN-------------: " + info.sumData + "---------" + info.sumNum)
-//                    val minAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-//                    avgObjs.add(minAvgObj)
-//                    producer.send(avgDataTopic, minAvgObj.toString)
-//                  }
-//                }
-//
-//                if ((action.avgType & Actions.AVG_HOUR) != 0) {
-//                  val info = hourAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-//                  if (info != null) {
-//                    log.info("----------AVG_HOUR-------------: " + info.sumData + "---------" + info.sumNum)
-//                    val hourAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-//                    avgObjs.add(hourAvgObj)
-//                    producer.send(avgDataTopic, hourAvgObj.toString)
-//                  }
-//                }
-//
-//                if ((action.avgType() & Actions.AVG_DAY) != 0) {
-//                  val info = dayAvgCache.addData(id, portIdx, ptimeStamp, transferedV)
-//                  if (info != null) {
-//                    log.info("----------AVG_DAY-------------: " + info.sumData + "---------" + info.sumNum)
-//                    val dayAvgObj = AvgPersistenceUtil.avgPersistenceObj(
-//                      id, portIdx, minAvgCache.avgName, dTimeStamp, ptimeStamp, info.sumData, info.sumNum)
-//                    avgObjs.add(dayAvgObj)
-//                    producer.send(avgDataTopic, dayAvgObj.toString)
-//                  }
-//                }
+                if (avgs != null) {
+                  avgs.foreach(avg => {
+                    val cinfo = avgCacheManager.addData(id, portIdx, ptimeStamp, transferedV, avg)
+                    if (cinfo != null) {
+                      val avgObj = AvgPersistenceUtil.avgPersistenceObj(id, portIdx, avg.avgName(),
+                        dTimeStamp, ptimeStamp, cinfo.sumData, cinfo.sumNum)
+                      avgObjs.add(avgObj)
+                      producer.send(avgDataTopic, avgObj.toString)
+                    }
+                  })
+                }
               }
               //printer.println(valueJson.toString())
               portIdx += 1
@@ -200,16 +178,17 @@ object CleanerMain {
             producer.send(realtimeTopic, msgJson.toString())
             //printer.println(msgJsonStr)
             //deviceConfigBroadcast.destroy()
-
+            mesAccumulator += 1
           }
-          log.info("---------------------AVG----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
+          log.info("---------------------AVG realtime----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
           persistence.batch(realtimeObjs, realtimePersistOpt, PersistenceLevel.BOTH)
-          log.info("---------------------AVG----------------" + avgObjs.size() + avgPersistOpt.getStr1 + avgPersistOpt.getStr2)
+          log.info("---------------------AVG avgdate----------------" + avgObjs.size() + avgPersistOpt.getStr1 + avgPersistOpt.getStr2)
           persistence.batch(avgObjs, avgPersistOpt)
           //printer.close()
         } else {
           log.info("Received message is empty: " + System.currentTimeMillis())
         }
+        log.info("Partition finished cost: " + (System.currentTimeMillis() - beginTime))
       })
       //rdd.saveAsTextFile("/tmp/rdd/%s".format(System.currentTimeMillis()))
     })

@@ -1,7 +1,8 @@
 package javaclz.mysql;
 
 import com.mchange.v2.c3p0.ComboPooledDataSource;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.beans.PropertyVetoException;
 import java.sql.Connection;
@@ -12,9 +13,9 @@ import java.sql.Statement;
 /**
  * Created by xiaoke on 17-6-5.
  */
-public class MySQLAccessor {
+public class MySQLAccessor{
 
-    private static final Logger log = Logger.getLogger(MySQLAccessor.class);
+    private static final Logger log = LoggerFactory.getLogger(MySQLAccessor.class);
 
     private static final String URL_FORMAT = "jdbc:mysql://%s:%d/%s";
 
@@ -29,6 +30,7 @@ public class MySQLAccessor {
     public static ComboPooledDataSource getDataSource(String host, int port, String dbname, String user, String passwd) {
         ComboPooledDataSource ds = new ComboPooledDataSource();
         String url = String.format(URL_FORMAT, host, port, dbname);
+        log.info("Mysql Connect Url is: " + url);
         ds.setJdbcUrl(url);
         ds.setUser(user);
         ds.setPassword(passwd);

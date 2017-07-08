@@ -1,6 +1,7 @@
 package javaclz.persist.accessor;
 
 import com.mongodb.MongoClient;
+import com.mongodb.MongoClientOptions;
 import com.mongodb.MongoCredential;
 import com.mongodb.ServerAddress;
 import javaclz.persist.config.DbAccessorConf;
@@ -18,8 +19,8 @@ public class PersistenceFactory {
 	
 	private PersistenceFactory(){}
 	
-	public static Persistence getAccessor(PersistenceAccessorConf pac){
-		Persistence pa = null;
+	public static ModulePersistence getAccessor(PersistenceAccessorConf pac){
+		ModulePersistence pa = null;
 		if (pac instanceof DbAccessorConf) {
 			DbAccessorConf dac = (DbAccessorConf)pac;
 			DBTYPE dbType = dac.getDbType();
@@ -53,16 +54,27 @@ public class PersistenceFactory {
 		if (DB_HOST == null || DB_PORT < 0) {
 			return null;
 		}
+		MongoClientOptions.Builder builder;
+		Integer timeout = dac.getTimeout();
+		if (timeout != null) {
+			builder = new MongoClientOptions.Builder();
+            builder.serverSelectionTimeout(timeout);
+			builder.connectTimeout(timeout);
+			//builder.socketTimeout(timeout);
+		} else {
+			builder = new MongoClientOptions.Builder();
+		}
 
 		ServerAddress serverAddress = new ServerAddress(DB_HOST, DB_PORT);
 		if (DB_USER == null || DB_PASSWORD == null || DB_NAME == null) {
-			MongoClient mc = new MongoClient(serverAddress);
+			MongoClient mc = new MongoClient(serverAddress, builder.build());
 			return new MongoPersistence(mc);
 		}
 
 		MongoCredential credential = MongoCredential.createCredential(DB_USER, DB_NAME,
 				DB_PASSWORD);
-		MongoClient mc = new MongoClient(serverAddress, Arrays.asList(credential));
+
+		MongoClient mc = new MongoClient(serverAddress, Arrays.asList(credential), builder.build());
 		return new MongoPersistence(mc);
 	}
 	

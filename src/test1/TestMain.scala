@@ -5,10 +5,14 @@ import java.util.Properties
 import java.util.concurrent._
 import javaclz.JavaV
 import javaclz.mysql.MySQLAccessor
+import javaclz.persist.accessor.PersistenceFactory
+import javaclz.persist.accessor.PersistenceFactory.DBTYPE
+import javaclz.persist.config.DbAccessorConf
 import javaclz.persist.data.PersistenceDataJsonWrap
 import javaclz.persist.opt.MongoPersistenceOpt
 import javaclz.zk.ZkClient
 
+import action.expression.ExprUtil
 import deviceconfig.DeviceConfigMananger
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
@@ -25,7 +29,7 @@ object TestMain {
   private lazy val log = Logger.getLogger(this.getClass)
 
   def main(args: Array[String]): Unit = {
-    PropertyConfigurator.configure(JavaV.LOG_PATH)
+    //PropertyConfigurator.configure(JavaV.LOG_PATH)
 //    val dbname = "device"
 //    val tblname = "realtime"
 //    val mongoPersistence = new MongoPersistenceOpt(dbname, tblname)
@@ -162,5 +166,27 @@ object TestMain {
 //      }
 //    }.start()
 
+    val b = System.currentTimeMillis()
+    val host = "192.168.1.135"
+    val port = 27017
+    val dbname = "device"
+    val mongDbConf = new DbAccessorConf
+    mongDbConf.setDbType(DBTYPE.MONGO)
+    mongDbConf.setTimeout("2000")
+    mongDbConf.setDbHost(host)
+    mongDbConf.setDbPort(port)
+    mongDbConf.setDbName(dbname)
+    val mongo = PersistenceFactory.getAccessor(mongDbConf)
+    val persistenceOpt = new MongoPersistenceOpt("device", "deviceConfig")
+    Thread.sleep(10000)
+    try {
+      mongo.persistenceOne(persistenceOpt, new PersistenceDataJsonWrap(
+        JSONObject.fromObject("{'id':'12345', 'name':'haha'}")))
+    } catch {
+      case e: Throwable => e.printStackTrace()
+    }
+
+    println(System.currentTimeMillis() - b)
   }
+
 }

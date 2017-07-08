@@ -15,9 +15,9 @@ public class ZkClient {
 
     private static final Logger log = Logger.getLogger(ZkClient.class);
 
-    private CountDownLatch latch = null;
+    private volatile CountDownLatch latch = null;
 
-    private ZooKeeper zk = null;
+    private volatile ZooKeeper zk = null;
 
     private String host;
 
@@ -41,10 +41,8 @@ public class ZkClient {
 
 
     public ZooKeeper zk() throws InterruptedException {
-        if (zk == null) {
-            if (latch != null) {
-                latch.await(timeout, TimeUnit.MILLISECONDS);
-            }
+        if (latch != null) {
+            latch.await(timeout, TimeUnit.MILLISECONDS);
         }
         return zk;
     }
@@ -96,7 +94,7 @@ public class ZkClient {
         if (latch != null) {
             latch.countDown();
         }
-
+        latch = null;
         if (zk != null) {
             try {
                 zk.close();

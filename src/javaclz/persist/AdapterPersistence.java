@@ -1,21 +1,23 @@
 package javaclz.persist;
 
 import javaclz.JavaV;
-import javaclz.persist.accessor.Persistence;
+import javaclz.persist.accessor.ModulePersistence;
 import javaclz.persist.accessor.PersistenceFactory;
 import javaclz.persist.config.DbAccessorConf;
 import javaclz.persist.config.FileAccessorConf;
 import javaclz.persist.data.PersistenceData;
 import javaclz.persist.opt.PersistenceOpt;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.log4j.Logger;
 import javaclz.persist.accessor.PersistenceFactory.DBTYPE;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.Properties;
 
-public class AdapterPersistence implements javaclz.persist.Persistence {
+public class AdapterPersistence implements Persistence {
 
-	private static final Logger log = Logger.getLogger(AdapterPersistence.class);
+	private static final Logger log = LoggerFactory.getLogger(AdapterPersistence.class);
 
 	private final Properties conf;
 
@@ -23,17 +25,18 @@ public class AdapterPersistence implements javaclz.persist.Persistence {
 
 	private final FileAccessorConf fileConf;
 
-	private Persistence dbPa;
+	private ModulePersistence dbPa;
 
-	private Persistence filePa;
+	private ModulePersistence filePa;
 
 	public AdapterPersistence(Configuration hconf, Properties conf) {
 		this.conf = conf;
 		mongDbConf = new DbAccessorConf();
 		mongDbConf.setDbType(DBTYPE.MONGO);
-		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST, "localhost");
+		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST, "192.168.1.110");
 		int port = Integer.parseInt(this.conf.getProperty(JavaV.PERSIST_MONGODB_PORT, "27017"));
 		String dbname = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME, "device");
+		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT));
 		mongDbConf.setDbHost(host);
 		mongDbConf.setDbPort(port);
 		mongDbConf.setDbName(dbname);

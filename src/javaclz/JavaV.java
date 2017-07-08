@@ -13,6 +13,7 @@ public class JavaV {
     public static final String STREAMING_TIME_INTERVAL = "sjtumaster.streaming.time.interal";
 
     // used for kafka
+    public static final String KAFKA_PARALLELISM_NUM = "sjtumaster.kafka.parallelism.num";
     public static final String KAFKA_TOPIC = "sjtumaster.kafka.topic";
     public static final String KAFKA_SERVER_URL = "sjtumaster.kafka.zk.url";
     public static final String KAFKA_ZK_URL = "sjtumaster.kafka.zk.url";
@@ -45,9 +46,12 @@ public class JavaV {
     public static final String PERSIST_MONGODB_HOST = "sjtumaster.persist.mongo.host";
     public static final String PERSIST_MONGODB_PORT = "sjtumaster.persist.mongo.port";
     public static final String PERSIST_MONGODB_DBNAME = "sjtumaster.persist.mongo.dbname";
+    public static final String PERSIST_MONGODB_TIMEOUT = "sjtumaser.persist.mongo.timeout";
     public static final String PERSIST_MONGODB_REALTIME_TBLNAME = "sjtumaster.persist.mongo.realtime.tblname";
     public static final String PERSIST_MONGODB_AVG_TBLNAME = "sjtumaster.persist.mongo.avg.tblname";
     public static final String PERSIST_FILE_DATE_FORMAT = "sjtumaster.persist.file.date.format";
+    public static final String PERSIST_FILE_REALTIME_BASEPATH = "sjtumaster.persist.file.realtime.basepath";
+    public static final String PERSIST_FILE_AVG_BASEPATH = "sjtumaster.persist.file.avg.basepath";
 
     public static final String SPARK_SQL_HDFS_BASEPATH = "sjtumaster.spark.sql.hdfs.basepath";
     public static final String SPARK_SQL_MONGO_BASEPATH = "sjtumaster.spark.sql.mongo.basepath";

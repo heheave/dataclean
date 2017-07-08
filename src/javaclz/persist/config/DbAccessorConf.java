@@ -12,6 +12,7 @@ public class DbAccessorConf extends PersistenceAccessorConf{
 	private final String DB_USER_KEY = "PERSIST_DB_USER_RESERVED_KEY";
 	private final String DB_PASSWARD_KEY = "PERSIST_DB_PASSWARD_RESERVED_KEY";
 	private final String DB_TABLE_KEY = "PERSIST_DB_TABLE_RESERVED_KEY";
+	private final String DB_TIMEOUT_KEY = "PERSIST_DB_TIMEOUT_RESERVED_KEY";
 	
 	public DbAccessorConf() {
 		super();
@@ -87,5 +88,11 @@ public class DbAccessorConf extends PersistenceAccessorConf{
 	public String getTblName() {
 		return getString(DB_TABLE_KEY);
 	}
+
+	public void setTimeout(String timeout) {
+		addOrUpdateConf(DB_TIMEOUT_KEY, timeout);
+	}
+
+	public int getTimeout() {return getInt(DB_TIMEOUT_KEY);}
 
 }

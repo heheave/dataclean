@@ -5,7 +5,7 @@ import javaclz.persist.data.PersistenceData;
 
 import java.util.Collection;
 
-public interface Persistence {
+public interface ModulePersistence {
 	
 	// for once persistence
 	void persistenceOne(PersistenceOpt opt, PersistenceData data) throws Exception;

@@ -6,8 +6,9 @@ import com.mongodb.client.MongoDatabase;
 import javaclz.persist.opt.PersistenceOpt;
 import javaclz.persist.data.PersistenceData;
 import net.sf.json.JSONObject;
-import org.apache.log4j.Logger;
 import org.bson.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -15,9 +16,9 @@ import java.util.Collection;
 import java.util.Date;
 import java.util.List;
 
-public class MongoPersistence implements Persistence {
+public class MongoPersistence implements ModulePersistence {
 	
-	private static final Logger log = Logger.getLogger(MongoPersistence.class);
+	private static final Logger log = LoggerFactory.getLogger(MongoPersistence.class);
 
 	private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
 
