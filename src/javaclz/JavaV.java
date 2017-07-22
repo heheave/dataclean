@@ -32,7 +32,8 @@ public class JavaV {
     public static final String DC_ZK_HOST = "sjtumaster.dc.zk.host";
     public static final String DC_ZK_PORT = "sjtumaster.dc.zk.port";
     public static final String DC_ZK_TIMEOUT = "sjtumaster.dc.zk.timout";
-    public static final String DC_ZK_PATH = "sjtumaster.dc.zk.path";
+    public static final String DC_ZK_APP_PATH = "sjtumaster.dc.zk.app.path";
+    public static final String DC_ZK_DEVICE_PATH = "sjtumaster.dc.zk.device.path";
     public static final String DC_MYSQL_HOST = "sjtumaster.dc.mysql.host";
     public static final String DC_MYSQL_PORT = "sjtumaster.dc.mysql.port";
     public static final String DC_MYSQL_DBNAME = "sjtumaster.dc.mysql.dbname";

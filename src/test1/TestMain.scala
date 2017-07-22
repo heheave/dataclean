@@ -10,7 +10,7 @@ import javaclz.persist.accessor.PersistenceFactory.DBTYPE
 import javaclz.persist.config.DbAccessorConf
 import javaclz.persist.data.PersistenceDataJsonWrap
 import javaclz.persist.opt.MongoPersistenceOpt
-import javaclz.zk.ZkClient
+import javaclz.zk.ZkClientSelf
 
 import action.expression.ExprUtil
 import deviceconfig.DeviceConfigMananger
@@ -166,27 +166,56 @@ object TestMain {
 //      }
 //    }.start()
 
-    val b = System.currentTimeMillis()
-    val host = "192.168.1.135"
-    val port = 27017
-    val dbname = "device"
-    val mongDbConf = new DbAccessorConf
-    mongDbConf.setDbType(DBTYPE.MONGO)
-    mongDbConf.setTimeout("2000")
-    mongDbConf.setDbHost(host)
-    mongDbConf.setDbPort(port)
-    mongDbConf.setDbName(dbname)
-    val mongo = PersistenceFactory.getAccessor(mongDbConf)
-    val persistenceOpt = new MongoPersistenceOpt("device", "deviceConfig")
-    Thread.sleep(10000)
-    try {
-      mongo.persistenceOne(persistenceOpt, new PersistenceDataJsonWrap(
-        JSONObject.fromObject("{'id':'12345', 'name':'haha'}")))
-    } catch {
-      case e: Throwable => e.printStackTrace()
+//    val b = System.currentTimeMillis()
+//    val host = "192.168.1.135"
+//    val port = 27017
+//    val dbname = "device"
+//    val mongDbConf = new DbAccessorConf
+//    mongDbConf.setDbType(DBTYPE.MONGO)
+//    mongDbConf.setTimeout("2000")
+//    mongDbConf.setDbHost(host)
+//    mongDbConf.setDbPort(port)
+//    mongDbConf.setDbName(dbname)
+//    val mongo = PersistenceFactory.getAccessor(mongDbConf)
+//    val persistenceOpt = new MongoPersistenceOpt("device", "deviceConfig")
+//    Thread.sleep(10000)
+//    try {
+//      mongo.persistenceOne(persistenceOpt, new PersistenceDataJsonWrap(
+//        JSONObject.fromObject("{'id':'12345', 'name':'haha'}")))
+//    } catch {
+//      case e: Throwable => e.printStackTrace()
+//    }
+//
+//    println(System.currentTimeMillis() - b)
+
+
+    val zkDec = new DeviceConfigMananger(new Properties())
+
+    val zkClient = new ZkClientSelf("localhost", 2181, 2000, null)
+
+    val path = zkClient.zk.exists("/application/app1", false)
+    if (path == null) {
+      zkClient.zk.create("/application/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+      zkClient.zk.create("/deviceconf/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
     }
 
-    println(System.currentTimeMillis() - b)
+    var i = 0
+    while (i < 2) {
+      val data = "{'mode':'did','data':'123'}"
+      val data1 = "{'idx':1}"
+      zkClient.zk.setData("/application/app1", data.getBytes(), -1)
+      zkClient.zk.setData("/deviceconf/app1", data1.getBytes(), -1)
+      Thread.sleep(3000)
+      i += 1
+    }
+
+    zkClient.zk().close()
+
+    Thread.sleep(3000)
+//    log.info("end")
+
+    log.info("xxxxxxxxxx")
+
   }
 
 }

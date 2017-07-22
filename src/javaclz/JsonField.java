@@ -6,6 +6,7 @@ package javaclz;
 public class JsonField {
 
     public static final class DeviceValue {
+        public static final String APP = "app";
         public static final String ID = "id";
         public static final String DTYPE = "dtype";
         public static final String DESC = "desc";

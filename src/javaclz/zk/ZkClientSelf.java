@@ -4,16 +4,15 @@ import org.apache.log4j.Logger;
 import org.apache.zookeeper.*;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Created by xiaoke on 17-6-4.
  */
-public class ZkClient {
+public class ZkClientSelf {
 
-    private static final Logger log = Logger.getLogger(ZkClient.class);
+    private static final Logger log = Logger.getLogger(ZkClientSelf.class);
 
     private volatile CountDownLatch latch = null;
 
@@ -31,7 +30,7 @@ public class ZkClient {
 
     private final ZkReconnected reConnectRun;
 
-    public ZkClient(String host, int port, int timeout, ZkReconnected reConnectRun) {
+    public ZkClientSelf(String host, int port, int timeout, ZkReconnected reConnectRun) {
         this.host = host;
         this.port = port;
         this.timeout = timeout;

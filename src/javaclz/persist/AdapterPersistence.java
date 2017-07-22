@@ -36,7 +36,7 @@ public class AdapterPersistence implements Persistence {
 		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST, "192.168.1.110");
 		int port = Integer.parseInt(this.conf.getProperty(JavaV.PERSIST_MONGODB_PORT, "27017"));
 		String dbname = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME, "device");
-		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT));
+		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT, "1000"));
 		mongDbConf.setDbHost(host);
 		mongDbConf.setDbPort(port);
 		mongDbConf.setDbName(dbname);

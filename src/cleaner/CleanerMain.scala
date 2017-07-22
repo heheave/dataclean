@@ -16,10 +16,11 @@ import avgcache.{AvgFactory, AvgCacheManager}
 
 import deviceconfig.{DeviceConfigManangerSink}
 import kafka.{SimpleKafkaUtils}
+import metric.MessageMetric
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
 import org.apache.spark.streaming.scheduler.{StreamingListenerBatchStarted, StreamingListenerBatchCompleted, StreamingListenerReceiverStarted, StreamingListener}
-import org.apache.spark.{Logging, SparkConf}
+import org.apache.spark.{SparkContext, Logging, SparkConf}
 
 import org.apache.spark.streaming.{Seconds, StreamingContext}
 import persistence.PersistenceSink
@@ -49,11 +50,13 @@ object CleanerMain extends Logging{
     sparkConf.setAppName("Cleaner")
       .setMaster(deployUrl)
       // Can this make a difference ???
+      .set("spark.throw.exception.without.resource", "false")
       .set("spark.streaming.unpersist", "true")
+    val sparkContext = new SparkContext(sparkConf)
 
-    val streamingContext = new StreamingContext(sparkConf, Seconds(interval / 1000))
-
-    val mesAccumulator = streamingContext.sparkContext.accumulator(0)
+    val streamingContext = new StreamingContext(sparkContext, Seconds(interval / 1000))
+    val stream = SimpleKafkaUtils.getStream(streamingContext, conf)
+    stream.print()
 
     val jobSqlManager = new SqlJobMnager(streamingContext.sparkContext, conf)
     jobSqlManager.start()
@@ -72,10 +75,14 @@ object CleanerMain extends Logging{
 
     val dbname = conf.getStringOrElse(JavaV.PERSIST_MONGODB_DBNAME, "device")
     val realtimeTblName = conf.getStringOrElse(JavaV.PERSIST_MONGODB_REALTIME_TBLNAME, "realtime")
+
+    // file backup store in a same palce
     val fileRealtimeBasePath = conf.getStringOrElse(JavaV.PERSIST_FILE_REALTIME_BASEPATH, "file:///tmp/rdd/realtime/")
 
     //TODO store the avg info in a same table
     val minAvgTblName = conf.getStringOrElse(JavaV.PERSIST_MONGODB_AVG_TBLNAME, "avgdata")
+
+    // file backup store in a same palce
     val fileAvgBasePath = conf.getStringOrElse(JavaV.PERSIST_FILE_AVG_BASEPATH, "file:///tmp/rdd/avg/")
 
 //    val hourAvgTblName = conf.getStringOrElse(JavaV.MONGODB_TBLNAME, "houravg")
@@ -105,8 +112,9 @@ object CleanerMain extends Logging{
 
     val kafkaStream = SimpleKafkaUtils.getStream(streamingContext, conf)
 
-    streamingContext.addStreamingListener(new StreamingListener {
+    val invalidAccumulator = streamingContext.sparkContext.accumulator(0)
 
+    streamingContext.addStreamingListener(new StreamingListener {
 
       override def onBatchStarted(batchStarted: StreamingListenerBatchStarted): Unit = {
         val batchInfo = batchStarted.batchInfo
@@ -115,10 +123,14 @@ object CleanerMain extends Logging{
 
       override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted): Unit = {
         val batchInfo = batchCompleted.batchInfo
+        batchInfo.numRecords
         log.info("***Batch completed, " + batchInfo.batchTime + "SD: " + batchInfo.schedulingDelay.get
           + ", PD: " + batchInfo.processingDelay + ", TD: " + batchInfo.totalDelay
         )
-        log.info(s"For now total ${mesAccumulator.value} messages has been tackled")
+
+        MessageMetric.invalidSet(invalidAccumulator.value)
+        MessageMetric.validIncrease(batchInfo.numRecords)
+        log.info(s"For now total ${MessageMetric.validNum} valid messages and ${MessageMetric.invalidNum} invalid message has been tackled")
       }
     })
 
@@ -139,15 +151,19 @@ object CleanerMain extends Logging{
           val avgObjs = new util.LinkedList[PersistenceData]()
           val realtimePersistOpt = new MongoPersistenceOpt(dbname, realtimeTblName, new FilePersistenceOpt(fileRealtimeBasePath, null))
           val avgPersistOpt = new MongoPersistenceOpt(dbname, minAvgTblName, new FilePersistenceOpt(fileAvgBasePath, null))
+
           while (iter.hasNext) {
             val msg = iter.next()._2
             val msgJson = JSONObject.fromObject(msg)
+            // following keys must be contained in a message
+            val app = msgJson.getString(JsonField.DeviceValue.APP)
             val id = msgJson.getString(JsonField.DeviceValue.ID)
             val portNum = msgJson.getInt(JsonField.DeviceValue.PORTNUM)
             val dTimeStamp = msgJson.getLong(JsonField.DeviceValue.DTIMESTAMP)
             val values = msgJson.getJSONArray(JsonField.DeviceValue.VALUES)
             val ptimeStamp = msgJson.getLong(JsonField.DeviceValue.PTIMESTAMP)
             var portIdx = 0
+            var hasInvalid = false
             while (portIdx < portNum) {
               val valueJson = values.getJSONObject(portIdx)
               val value = valueJson.get(JsonField.DeviceValue.VALUE)
@@ -169,6 +185,9 @@ object CleanerMain extends Logging{
                   })
                 }
               }
+              if (valueJson.containsKey(JsonField.DeviceValue.VALID) && !valueJson.getBoolean(JsonField.DeviceValue.VALID)) {
+                hasInvalid = true
+              }
               //printer.println(valueJson.toString())
               portIdx += 1
             }
@@ -178,7 +197,10 @@ object CleanerMain extends Logging{
             producer.send(realtimeTopic, msgJson.toString())
             //printer.println(msgJsonStr)
             //deviceConfigBroadcast.destroy()
-            mesAccumulator += 1
+            log.info("---------------------------count += 1")
+            if (hasInvalid) {
+              invalidAccumulator += 1
+            }
           }
           log.info("---------------------AVG realtime----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
           persistence.batch(realtimeObjs, realtimePersistOpt, PersistenceLevel.BOTH)

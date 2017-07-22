@@ -2,30 +2,33 @@ package deviceconfig
 
 import java.util
 import java.util.Properties
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 import javaclz.mysql.MySQLAccessor
-import javaclz.zk.ZkClient
-import javaclz.zk.ZkClient.ZkReconnected
+import javaclz.zk.{ZkManager, ZkClientSelf}
 import javaclz.JavaV
 
 import action._
 import com.mchange.v2.c3p0.ComboPooledDataSource
-import org.apache.log4j.Logger
+import net.sf.json.JSONObject
+import org.I0Itec.zkclient.{IZkChildListener, ZkClient, IZkDataListener}
 import org.apache.spark.Logging
-import org.apache.zookeeper.Watcher.Event
-import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
+import org.apache.zookeeper.CreateMode
 
 /**
   * Created by xiaoke on 17-6-4.
   */
+
 class DeviceConfigMananger(prop: Properties) extends Logging{
 
   @transient private val curIndex = new AtomicInteger(-1)
 
   @transient private val config: DeviceConfigMap = new DeviceConfigMap()
 
-  @transient @volatile var zkClient: ZkClient = _
+  @transient private val childrenPathSet = new util.HashSet[String]()
+
+  @transient @volatile var zkManagerForAppConf: ZkManager = _
+
+  @transient @volatile var zkManagerForDeviceConf: ZkManager = _
 
   @transient @volatile var mysqlPool: ComboPooledDataSource = _
 
@@ -36,7 +39,8 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
     initZK()
     sys.addShutdownHook {
       if (mysqlPool != null) mysqlPool.close()
-      if (zkClient != null) zkClient.close()
+      if (zkManagerForAppConf != null) zkManagerForAppConf.close()
+      if (zkManagerForDeviceConf != null) zkManagerForDeviceConf.close()
       if (config != null) config.clear()
     }
   }
@@ -51,57 +55,172 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
     loadDataById()
   }
 
-  def initZK(): Unit = {
-    val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "192.168.1.110")
-    val zkPort = prop.getProperty(JavaV.DC_ZK_PORT, "2181").toInt
-    val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
-    val zkWatchPath = prop.getProperty(JavaV.DC_ZK_PATH, "/deviceConfig/change")
-    zkClient = new ZkClient(zkHost, zkPort, zkTimeout, new ZkReconnected {
-      override def reconnected(zk: ZooKeeper): Unit = {
-        zk.exists(zkWatchPath, new Watcher {
-          override def process(watchedEvent: WatchedEvent): Unit = {
-            val path = watchedEvent.getPath
-            log.info(s"-----RECZK------watch event type: ${watchedEvent.getType} at path ${path}")
-            if (watchedEvent.getType == Event.EventType.NodeCreated
-              || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-              val info = zk.getData(path, false, null)
-              if (info != null) {
-                try {
-                  val id = new String(info).toInt
-                  log.info("-----RECZK------change at id: " + id)
-                  loadDataById(id)
-                } catch {
-                  case e: Throwable => log.warn("Could not get id", e)
-                }
-              }
-            }
-            zk.exists(zkWatchPath, this)
-          }
-        })
-      }
-    })
-
-    val zk = zkClient.zk
-    zk.exists(zkWatchPath, new Watcher {
-      override def process(watchedEvent: WatchedEvent): Unit = {
-        val path = watchedEvent.getPath
-        log.info(s"-----ZK------watch event type: ${watchedEvent.getType} at path ${path}")
-        if (watchedEvent.getType == Event.EventType.NodeCreated
-          || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-          val info = zk.getData(path, false, null)
-          if (info != null) {
-            try {
-              val id = new String(info).toInt
-              log.info("-----ZK------change at id: " + id)
-              loadDataById(id)
-            } catch {
-              case e: Throwable => log.warn("Could not get id", e)
-            }
-          }
+  def tackleBasePathData(appBasePath: String, deviceBasePath: String, list: util.List[String]): Unit = {
+    val zkClientApp = zkManagerForAppConf.getClient
+    val zkClientDevice = zkManagerForDeviceConf.getClient
+    if (list == null || list.isEmpty) return
+    childrenPathSet.synchronized {
+      val toAdd = new util.ArrayList[String]
+      val newSet = new util.ArrayList[String]
+      val tmpIter = list.iterator()
+      while (tmpIter.hasNext) {
+        val p = tmpIter.next()
+        if (childrenPathSet.remove(p)) {
+          newSet.add(p)
+        } else {
+          toAdd.add(p)
         }
-        zk.exists(path, this)
+      }
+      childrenPathSet.clear()
+      try {
+        childrenPathSet.addAll(newSet)
+        val toAddIter = toAdd.iterator()
+        while (toAddIter.hasNext) {
+          val tmpPath = toAddIter.next()
+          val addPathApp = "%s/%s".format(appBasePath, tmpPath)
+
+          zkClientApp.subscribeDataChanges(addPathApp, new IZkDataListener {
+
+            override def handleDataChange(s: String, o: scala.Any): Unit = {
+              log.info("App conf change: " + s + " : " + o.toString)
+              tackleAppConfPathData(s, o)
+            }
+
+            override def handleDataDeleted(s: String): Unit = {
+              log.info("App conf path delete: " + s)
+              zkClientApp.unsubscribeDataChanges(s, this)
+            }
+          })
+          log.info(addPathApp)
+          zkClientApp.exists(addPathApp)
+
+
+          val addPathDevice = "%s/%s".format(deviceBasePath, tmpPath)
+          zkClientDevice.subscribeDataChanges(addPathDevice, new IZkDataListener {
+
+            override def handleDataChange(s: String, o: scala.Any): Unit = {
+              log.info("Device conf change: " + s + " : " + o.toString)
+              tackleDeviceConfPathData(s, o)
+            }
+
+            override def handleDataDeleted(s: String): Unit = {
+              log.info("Device conf path delete: " + s)
+              zkClientDevice.unsubscribeDataChanges(s, this)
+            }
+          })
+
+        }
+
+      } finally {
+        toAdd.clear()
+        newSet.clear()
+      }
+    }
+  }
+
+
+  def tackleAppConfPathData(path:String, data: Any) = {
+    if (data != null) {
+      try {
+        val strData = data match {
+          case str: String => str
+          case _ => data.toString
+        }
+        val jo = JSONObject.fromObject(strData)
+        log.info("-----" + jo.toString())
+        //val idx = jo.getString("idx").toInt
+        //loadDataById(idx)
+      } catch {
+        case e: Throwable => logWarning("Could not get id", e)
+      }
+    }
+  }
+
+  def tackleDeviceConfPathData(path: String, data: Any) = {
+    if (data != null) {
+      try {
+        val strData = data match {
+          case str: String => str
+          case _ => data.toString
+        }
+        val jo = JSONObject.fromObject(strData)
+        val idx = jo.getString("idx").toInt
+        loadDataById(idx)
+      } catch {
+        case e: Throwable => logWarning("Could not get id", e)
+      }
+    }
+  }
+
+  def initZK(): Unit = {
+    val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "192.168.1.110:2181")
+    val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
+    val appBasePath = prop.getProperty(JavaV.DC_ZK_APP_PATH, "/application")
+    val deviceBasePath = prop.getProperty(JavaV.DC_ZK_DEVICE_PATH, "/deviceconf")
+    zkManagerForAppConf = new ZkManager(zkHost, zkTimeout)
+    zkManagerForDeviceConf = new ZkManager(zkHost, zkTimeout)
+
+    val zkClientForAppConf = zkManagerForAppConf.getClient
+    if (!zkClientForAppConf.exists(appBasePath)) {
+      zkClientForAppConf.create(appBasePath, null, CreateMode.PERSISTENT)
+    }
+    zkClientForAppConf.subscribeChildChanges(appBasePath, new IZkChildListener() {
+      override def handleChildChange(s: String, list: util.List[String]): Unit = {
+        tackleBasePathData(appBasePath, deviceBasePath, list)
       }
     })
+    val childListener = zkClientForAppConf.getChildren(appBasePath)
+    tackleBasePathData(appBasePath, deviceBasePath, childListener)
+
+
+
+
+//    zkClient = new ZkClientSelf(zkHost, zkPort, zkTimeout, new ZkReconnected {
+//      override def reconnected(zk: ZooKeeper): Unit = {
+//        zk.exists(zkWatchPath, new Watcher {
+//          override def process(watchedEvent: WatchedEvent): Unit = {
+//            val path = watchedEvent.getPath
+//            log.info(s"-----RECZK------watch event type: ${watchedEvent.getType} at path ${path}")
+//            if (watchedEvent.getType == Event.EventType.NodeCreated
+//              || watchedEvent.getType == Event.EventType.NodeDataChanged) {
+//              val info = zk.getData(path, false, null)
+//              if (info != null) {
+//                try {
+//                  val id = new String(info).toInt
+//                  log.info("-----RECZK------change at id: " + id)
+//                  loadDataById(id)
+//                } catch {
+//                  case e: Throwable => log.warn("Could not get id", e)
+//                }
+//              }
+//            }
+//            zk.exists(zkWatchPath, this)
+//          }
+//        })
+//      }
+//    })
+//
+//    val zk = zkClient.zk
+//    zk.exists(zkWatchPath, new Watcher {
+//      override def process(watchedEvent: WatchedEvent): Unit = {
+//        val path = watchedEvent.getPath
+//        log.info(s"-----ZK------watch event type: ${watchedEvent.getType} at path ${path}")
+//        if (watchedEvent.getType == Event.EventType.NodeCreated
+//          || watchedEvent.getType == Event.EventType.NodeDataChanged) {
+//          val info = zk.getData(path, false, null)
+//          if (info != null) {
+//            try {
+//              val id = new String(info).toInt
+//              log.info("-----ZK------change at id: " + id)
+//              loadDataById(id)
+//            } catch {
+//              case e: Throwable => log.warn("Could not get id", e)
+//            }
+//          }
+//        }
+//        zk.exists(path, this)
+//      }
+// })
   }
 
   def configMap = config

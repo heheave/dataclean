@@ -36,7 +36,7 @@ object SimpleKafkaUtils {
       //"serializer.class" -> "kafka.serializer.StringEncoder"
     )
     val topic = Map[String, Int](conf.getStringOrElse(JavaV.KAFKA_TOPIC, "devicegate-topic") -> 1)
-    val parilizeNum = conf.getIntOrElse(JavaV.KAFKA_PARALLELISM_NUM, 5)
+    val parilizeNum = conf.getIntOrElse(JavaV.KAFKA_PARALLELISM_NUM, 2)
     val kafkaStreams = (1 to parilizeNum).map(i => {
       val stream = KafkaUtils.createStream[String, String, StringDecoder, StringDecoder](
         streamingContext, props, topic, StorageLevel.MEMORY_ONLY)
