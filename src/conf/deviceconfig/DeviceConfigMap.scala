@@ -1,8 +1,8 @@
-package deviceconfig
+package conf.deviceconfig
 
 import java.util
 
-import action.Action
+import conf.action.Action
 
 /**
   * Created by xiaoke on 17-6-1.

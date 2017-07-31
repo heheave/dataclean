@@ -11,10 +11,9 @@ import javaclz.persist.opt.{FilePersistenceOpt, MongoPersistenceOpt}
 import javaclz.{JsonField, JavaConfigure, JavaV}
 
 import _root_.util.AvgPersistenceUtil
-import action.{Actions}
+import conf.DeviceConfigManangerSink
+import conf.action.{Actions}
 import avgcache.{AvgFactory, AvgCacheManager}
-
-import deviceconfig.{DeviceConfigManangerSink}
 import kafka.{SimpleKafkaUtils}
 import metric.MessageMetric
 import net.sf.json.JSONObject
@@ -30,13 +29,11 @@ import sql.SqlJobMnager
 /**
   * Created by xiaoke on 17-5-20.
   */
-object CleanerMain extends Logging{
-
-  //private val log = Logger.getLogger(CleanerMain.getClass)
+object CleanerMain extends Logging {
 
   def main(args: Array[String]): Unit = {
-    PropertyConfigurator.configure(JavaV.LOG_PATH)
-    //val file = new File(JavaV.LOG_PATH)
+    // PropertyConfigurator.configure(JavaV.LOG_PATH)
+    // val file = new File(JavaV.LOG_PATH)
     val conf = new JavaConfigure()
     conf.readFromXml()
     val deployUrl = if (conf.getString(JavaV.MASTER_HOST) == null) {
@@ -45,7 +42,7 @@ object CleanerMain extends Logging{
       "spark://%s:7077".format(conf.getString(JavaV.MASTER_HOST))
     }
     log.info("Spark deploy url is: " + deployUrl)
-    val interval = conf.getLongOrElse(JavaV.STREAMING_TIME_INTERVAL, 10000)
+    val secInterval = conf.getLongOrElse(JavaV.STREAMING_TIME_SEC_INTERVAL, 10)
     val sparkConf = new SparkConf()
     sparkConf.setAppName("Cleaner")
       .setMaster(deployUrl)
@@ -54,9 +51,7 @@ object CleanerMain extends Logging{
       .set("spark.streaming.unpersist", "true")
     val sparkContext = new SparkContext(sparkConf)
 
-    val streamingContext = new StreamingContext(sparkContext, Seconds(interval / 1000))
-    val stream = SimpleKafkaUtils.getStream(streamingContext, conf)
-    stream.print()
+    val streamingContext = new StreamingContext(sparkContext, Seconds(secInterval))
 
     val jobSqlManager = new SqlJobMnager(streamingContext.sparkContext, conf)
     jobSqlManager.start()
@@ -145,10 +140,11 @@ object CleanerMain extends Logging{
           val persistence = persistenceBroadcast.value
           //log.info("------------B persistence------------")
           val configMap = deviceConfigBroadcast.value.configMap
+
           //log.info("------------B configMap------------")
           implicit val jsonToPd = (jo: JSONObject) => new PersistenceDataJsonWrap(jo)
-          val realtimeObjs = new util.LinkedList[PersistenceData]()
-          val avgObjs = new util.LinkedList[PersistenceData]()
+          val realtimeObjs = new util.HashMap[String, util.List[PersistenceData]]
+          val avgObjs = new util.HashMap[String, util.List[PersistenceData]]
           val realtimePersistOpt = new MongoPersistenceOpt(dbname, realtimeTblName, new FilePersistenceOpt(fileRealtimeBasePath, null))
           val avgPersistOpt = new MongoPersistenceOpt(dbname, minAvgTblName, new FilePersistenceOpt(fileAvgBasePath, null))
 
@@ -169,7 +165,7 @@ object CleanerMain extends Logging{
               val value = valueJson.get(JsonField.DeviceValue.VALUE)
               val action = configMap.getActions(id, portIdx)
               if (action != null && value != null) {
-                log.info("id: " + id + ", action: " + action.getClass.getName + ", type: " + action.avgType())
+                log.info("id: " + id + ", conf.action: " + action.getClass.getName + ", type: " + action.avgType())
                 val transferedV = action.transferedV(Actions.objToDouble(value))
                 valueJson.put(JsonField.DeviceValue.VALUE, transferedV)
                 val avgs = action.avgType()
@@ -179,7 +175,15 @@ object CleanerMain extends Logging{
                     if (cinfo != null) {
                       val avgObj = AvgPersistenceUtil.avgPersistenceObj(id, portIdx, avg.avgName(),
                         dTimeStamp, ptimeStamp, cinfo.sumData, cinfo.sumNum)
-                      avgObjs.add(avgObj)
+
+                      val appAvgList = avgObjs.get(app)
+                      if (appAvgList != null) {
+                        appAvgList.add(avgObj)
+                      } else {
+                        val newAppAvgList = new util.LinkedList[PersistenceData]()
+                        newAppAvgList.add(avgObj)
+                        avgObjs.put(app, newAppAvgList)
+                      }
                       producer.send(avgDataTopic, avgObj.toString)
                     }
                   })
@@ -193,7 +197,14 @@ object CleanerMain extends Logging{
             }
 
             //printer.close()
-            realtimeObjs.add(msgJson)
+            val appRealtimeList = realtimeObjs.get(app)
+            if (appRealtimeList != null) {
+              appRealtimeList.add(msgJson)
+            } else {
+              val newAppRealtimeList = new util.LinkedList[PersistenceData]()
+              newAppRealtimeList.add(msgJson)
+              realtimeObjs.put(app, newAppRealtimeList)
+            }
             producer.send(realtimeTopic, msgJson.toString())
             //printer.println(msgJsonStr)
             //deviceConfigBroadcast.destroy()
@@ -203,9 +214,19 @@ object CleanerMain extends Logging{
             }
           }
           log.info("---------------------AVG realtime----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
-          persistence.batch(realtimeObjs, realtimePersistOpt, PersistenceLevel.BOTH)
+          val realIter = realtimeObjs.entrySet().iterator()
+          while (realIter.hasNext) {
+            val entry = realIter.next()
+            persistence.batch(entry.getValue, new MongoPersistenceOpt(entry.getKey, realtimeTblName, new FilePersistenceOpt(fileRealtimeBasePath, null)))
+          }
+          //persistence.batch(realtimeObjs, realtimePersistOpt, PersistenceLevel.BOTH)
           log.info("---------------------AVG avgdate----------------" + avgObjs.size() + avgPersistOpt.getStr1 + avgPersistOpt.getStr2)
-          persistence.batch(avgObjs, avgPersistOpt)
+          val avgIter = avgObjs.entrySet().iterator()
+          while (realIter.hasNext) {
+            val entry = avgIter.next()
+            persistence.batch(entry.getValue, new MongoPersistenceOpt(entry.getKey, minAvgTblName, new FilePersistenceOpt(fileAvgBasePath, null)))
+          }
+          //persistence.batch(avgObjs, avgPersistOpt)
           //printer.close()
         } else {
           log.info("Received message is empty: " + System.currentTimeMillis())

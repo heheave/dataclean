@@ -1,4 +1,4 @@
-package action.expression
+package conf.action.expression
 
 import java.util
 
@@ -117,7 +117,7 @@ object ExprUtil extends Logging{
       case '-' => 1
       case '*' => 2
       case '/' => 2
-      case _ =>  throw new IllegalArgumentException("Unsupported operation: " + ch)
+      case _ =>  throw new IllegalArgumentException(s"Unsupported comparison between: ${ch1} and ${ch2}")
     }
     level(ch1) <= level(ch2)
   }

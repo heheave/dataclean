@@ -12,8 +12,8 @@ import javaclz.persist.data.PersistenceDataJsonWrap
 import javaclz.persist.opt.MongoPersistenceOpt
 import javaclz.zk.ZkClientSelf
 
-import action.expression.ExprUtil
-import deviceconfig.DeviceConfigMananger
+import conf.DeviceConfigMananger
+import conf.action.expression.ExprUtil
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -189,7 +189,7 @@ object TestMain {
 //    println(System.currentTimeMillis() - b)
 
 
-    val zkDec = new DeviceConfigMananger(new Properties())
+    //val zkDec = new DeviceConfigMananger(new Properties())
 
     val zkClient = new ZkClientSelf("localhost", 2181, 2000, null)
 
@@ -200,7 +200,7 @@ object TestMain {
     }
 
     var i = 0
-    while (i < 2) {
+    while (i < 1) {
       val data = "{'mode':'did','data':'123'}"
       val data1 = "{'idx':1}"
       zkClient.zk.setData("/application/app1", data.getBytes(), -1)

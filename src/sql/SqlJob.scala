@@ -231,33 +231,6 @@ class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Ser
             }
           }
         }
-        //      val runner = new Runnable {
-        //        // it's the real sql job
-        //        // be careful to spark closure problem
-        //        override def run(): Unit = {
-        //
-        //          val (sql, pidx) = {
-        //            val infos = line.split(":")
-        //            var s: String = null
-        //            var i = -1
-        //            if (infos.length > 0) {
-        //              s = infos(0).replaceAll(needToReplaceTblName, realTblName)
-        //            }
-        //            if (infos.length > 1) {
-        //              i = try { infos(1).toInt } catch {
-        //                case e: Throwable => {
-        //                  retVal(Array(e.getMessage), socketId)
-        //                  return
-        //                }
-        //              }
-        //            }
-        //            (s, i)
-        //          }
-        //          log.info("--------------------------------------------" + SparkEnv.get.executorId)
-        //
-        //
-        //        }
-        //      }
         if (runner != null) {
           executors.submit(runner)
         } else {

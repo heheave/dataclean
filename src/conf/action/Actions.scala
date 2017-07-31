@@ -1,4 +1,4 @@
-package action
+package conf.action
 
 import avgcache.{Avg, AvgFactory}
 
@@ -17,7 +17,7 @@ object Actions {
     if(avgStr == null) {
       None
     } else {
-      val avgs = avgStr.split(":")
+      val avgs = avgStr.split("&")
       val result = new Array[Avg](avgs.length)
       var idx = 0
       while (idx < avgs.length) {
@@ -36,8 +36,8 @@ object Actions {
         result(idx) = avg
         idx += 1
       }
-      result.filter(_!=null)
-      if (result.length < 1) {
+      result.filter(_ != null)
+      if (result.isEmpty) {
         None
       } else {
         Some(result)
@@ -52,7 +52,7 @@ object Actions {
     case d: Double => d
     case f: Float => f.toDouble
     case l: Long => l.toDouble
-        case s: String => s.toDouble
+    case s: String => s.toDouble
     case _ => throw new IllegalArgumentException("Class[%s] cannot be cast to double".format(obj.getClass.getName))
   }
 

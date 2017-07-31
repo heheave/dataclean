@@ -1,28 +1,104 @@
-package deviceconfig
+package conf
 
 import java.util
-import java.util.Properties
+import java.util.{UUID, Properties}
 import java.util.concurrent.atomic.AtomicInteger
-import javaclz.mysql.MySQLAccessor
-import javaclz.zk.{ZkManager, ZkClientSelf}
 import javaclz.JavaV
+import javaclz.mysql.MySQLAccessor
+import javaclz.zk.ZkManager
 
-import action._
 import com.mchange.v2.c3p0.ComboPooledDataSource
+import conf.action._
+import conf.deviceconfig.{AppEntry, AppConfigMap, DeviceConfigMap}
 import net.sf.json.JSONObject
-import org.I0Itec.zkclient.{IZkChildListener, ZkClient, IZkDataListener}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener}
 import org.apache.spark.Logging
 import org.apache.zookeeper.CreateMode
 
 /**
   * Created by xiaoke on 17-6-4.
   */
+trait NodeHook {
+  def trigerOn(app: String, data: AnyRef)
+}
+
+object DeviceConfigMananger {
+
+  private class NodeHookImp(val mark: String, p:(String, AnyRef) => Unit) extends NodeHook {
+
+    override def trigerOn(app: String, data: AnyRef): Unit = p(app, data)
+
+    override def hashCode(): Int = mark.hashCode()
+
+    override def equals(obj: scala.Any): Boolean = {
+      obj match {
+        case other: NodeHookImp => mark.equals(other.mark)
+        case _ => false
+      }
+    }
+  }
+
+  private val newAppNodeHook = new util.HashSet[NodeHook]
+
+  private val deleteAppNodeHook = new util.HashSet[NodeHook]
+
+  def trigerHook(app: String, data: AnyRef, isNew: Boolean) = {
+     if (isNew) {
+      newAppNodeHook.synchronized {
+        val iter = newAppNodeHook.iterator()
+        while (iter.hasNext) {
+          val hook = iter.next()
+          try {
+            hook.trigerOn(app, data)
+          } catch {
+            case e: Throwable => //ignore
+          }
+        }
+      }
+    } else {
+       deleteAppNodeHook.synchronized {
+         val iter = deleteAppNodeHook.iterator()
+         while (iter.hasNext) {
+           val hook = iter.next()
+           try {
+             hook.trigerOn(app, data)
+           } catch {
+             case e: Throwable => //ignore
+           }
+         }
+       }
+    }
+  }
+
+  def addNewHook(nh: NodeHook): String = newAppNodeHook.synchronized {
+    val newMark = UUID.randomUUID().toString
+    newAppNodeHook.add(new NodeHookImp(newMark, nh.trigerOn))
+    newMark
+  }
+
+  def addDeleteHook(nh: NodeHook): String = deleteAppNodeHook.synchronized {
+    val newMark = UUID.randomUUID().toString
+    deleteAppNodeHook.add(new NodeHookImp("xxx", nh.trigerOn))
+    newMark
+  }
+
+  def rmNewHook(nh: String): Unit = newAppNodeHook.synchronized {
+    newAppNodeHook.remove(new NodeHookImp(nh, null))
+  }
+
+  def rmDeleteHook(nh: String): Unit = deleteAppNodeHook.synchronized {
+    deleteAppNodeHook.remove(new NodeHookImp(nh, null))
+  }
+
+}
 
 class DeviceConfigMananger(prop: Properties) extends Logging{
 
-  @transient private val curIndex = new AtomicInteger(-1)
+  @transient private val curIndexes = new util.HashMap[String, AtomicInteger]()
 
-  @transient private val config: DeviceConfigMap = new DeviceConfigMap()
+  @transient private val deviceConfig: DeviceConfigMap = new DeviceConfigMap()
+
+  @transient private val appConfig: AppConfigMap = new AppConfigMap()
 
   @transient private val childrenPathSet = new util.HashSet[String]()
 
@@ -34,28 +110,37 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
 
   init()
 
-  def init(): Unit = {
+  def configMap = deviceConfig
+
+  def getAppConf(appName: String) = appConfig.get(appName) match {
+    case null => None
+    case ae: AppEntry  => Some(ae)
+  }
+
+  private def init(): Unit = {
     initMySql()
     initZK()
     sys.addShutdownHook {
       if (mysqlPool != null) mysqlPool.close()
       if (zkManagerForAppConf != null) zkManagerForAppConf.close()
       if (zkManagerForDeviceConf != null) zkManagerForDeviceConf.close()
-      if (config != null) config.clear()
+      if (appConfig != null) appConfig.clear()
+      if (deviceConfig != null) deviceConfig.clear()
+      if (curIndexes != null) curIndexes.clear()
     }
   }
 
-  def initMySql(): Unit = {
+  private def initMySql(): Unit = {
     val mysqlHost = prop.getProperty(JavaV.DC_MYSQL_HOST, "192.168.1.110")
     val mysqlPort = prop.getProperty(JavaV.DC_MYSQL_PORT, "3306").toInt
     val mysqlDbname = prop.getProperty(JavaV.DC_MYSQL_DBNAME, "device")
     val mysqlUser = prop.getProperty(JavaV.DC_MYSQL_USER, "root")
     val mysqlPasswd = prop.getProperty(JavaV.DC_MYSQL_PASSWD, "heheave")
     mysqlPool = MySQLAccessor.getDataSource(mysqlHost, mysqlPort, mysqlDbname, mysqlUser, mysqlPasswd)
-    loadDataById()
   }
 
-  def tackleBasePathData(appBasePath: String, deviceBasePath: String, list: util.List[String]): Unit = {
+  private def tackleBasePathData(appBasePath: String, deviceBasePath: String, list: util.List[String]):
+    Unit = zkManagerForAppConf.synchronized {
     val zkClientApp = zkManagerForAppConf.getClient
     val zkClientDevice = zkManagerForDeviceConf.getClient
     if (list == null || list.isEmpty) return
@@ -88,11 +173,15 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
 
             override def handleDataDeleted(s: String): Unit = {
               log.info("App conf path delete: " + s)
+              val app = pathToApp(s)
+              appConfig.remove(app)
+              curIndexes.remove(app)
+              DeviceConfigMananger.trigerHook(app, null, false)
               zkClientApp.unsubscribeDataChanges(s, this)
             }
           })
-          log.info(addPathApp)
-          zkClientApp.exists(addPathApp)
+          val appData = zkClientApp.readData[String](addPathApp, true)
+          tackleAppConfPathData(addPathApp, appData)
 
 
           val addPathDevice = "%s/%s".format(deviceBasePath, tmpPath)
@@ -108,9 +197,9 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
               zkClientDevice.unsubscribeDataChanges(s, this)
             }
           })
-
+          val deviceData = zkClientDevice.readData[String](addPathDevice, true)
+          tackleDeviceConfPathData(addPathDevice, deviceData)
         }
-
       } finally {
         toAdd.clear()
         newSet.clear()
@@ -119,7 +208,7 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
   }
 
 
-  def tackleAppConfPathData(path:String, data: Any) = {
+  private def tackleAppConfPathData(path: String, data: Any) = zkManagerForAppConf.synchronized {
     if (data != null) {
       try {
         val strData = data match {
@@ -128,6 +217,7 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
         }
         val jo = JSONObject.fromObject(strData)
         log.info("-----" + jo.toString())
+        DeviceConfigMananger.trigerHook(pathToApp(path), jo, true)
         //val idx = jo.getString("idx").toInt
         //loadDataById(idx)
       } catch {
@@ -136,7 +226,7 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
     }
   }
 
-  def tackleDeviceConfPathData(path: String, data: Any) = {
+  private def tackleDeviceConfPathData(path: String, data: Any) = zkManagerForAppConf.synchronized {
     if (data != null) {
       try {
         val strData = data match {
@@ -145,14 +235,14 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
         }
         val jo = JSONObject.fromObject(strData)
         val idx = jo.getString("idx").toInt
-        loadDataById(idx)
+        loadDataById(pathToApp(path), idx)
       } catch {
         case e: Throwable => logWarning("Could not get id", e)
       }
     }
   }
 
-  def initZK(): Unit = {
+  private def initZK(): Unit = {
     val zkHost = prop.getProperty(JavaV.DC_ZK_HOST, "192.168.1.110:2181")
     val zkTimeout = prop.getProperty(JavaV.DC_ZK_TIMEOUT, "10000").toInt
     val appBasePath = prop.getProperty(JavaV.DC_ZK_APP_PATH, "/application")
@@ -169,90 +259,70 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
         tackleBasePathData(appBasePath, deviceBasePath, list)
       }
     })
-    val childListener = zkClientForAppConf.getChildren(appBasePath)
-    tackleBasePathData(appBasePath, deviceBasePath, childListener)
-
-
-
-
-//    zkClient = new ZkClientSelf(zkHost, zkPort, zkTimeout, new ZkReconnected {
-//      override def reconnected(zk: ZooKeeper): Unit = {
-//        zk.exists(zkWatchPath, new Watcher {
-//          override def process(watchedEvent: WatchedEvent): Unit = {
-//            val path = watchedEvent.getPath
-//            log.info(s"-----RECZK------watch event type: ${watchedEvent.getType} at path ${path}")
-//            if (watchedEvent.getType == Event.EventType.NodeCreated
-//              || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-//              val info = zk.getData(path, false, null)
-//              if (info != null) {
-//                try {
-//                  val id = new String(info).toInt
-//                  log.info("-----RECZK------change at id: " + id)
-//                  loadDataById(id)
-//                } catch {
-//                  case e: Throwable => log.warn("Could not get id", e)
-//                }
-//              }
-//            }
-//            zk.exists(zkWatchPath, this)
-//          }
-//        })
+    val childPath = zkClientForAppConf.getChildren(appBasePath)
+    tackleBasePathData(appBasePath, deviceBasePath, childPath)
+//    if (childPath != null) {
+//      val cpIter = childPath.iterator()
+//      while (cpIter.hasNext) {
+//        val cp = cpIter.next()
+//        loadDataById(pathToApp(cp))
 //      }
-//    })
-//
-//    val zk = zkClient.zk
-//    zk.exists(zkWatchPath, new Watcher {
-//      override def process(watchedEvent: WatchedEvent): Unit = {
-//        val path = watchedEvent.getPath
-//        log.info(s"-----ZK------watch event type: ${watchedEvent.getType} at path ${path}")
-//        if (watchedEvent.getType == Event.EventType.NodeCreated
-//          || watchedEvent.getType == Event.EventType.NodeDataChanged) {
-//          val info = zk.getData(path, false, null)
-//          if (info != null) {
-//            try {
-//              val id = new String(info).toInt
-//              log.info("-----ZK------change at id: " + id)
-//              loadDataById(id)
-//            } catch {
-//              case e: Throwable => log.warn("Could not get id", e)
-//            }
-//          }
-//        }
-//        zk.exists(path, this)
-//      }
-// })
+//    }
   }
 
-  def configMap = config
+  private def pathToApp(path: String): String = {
+    if (path != null) {
+      val lastIdx = path.lastIndexOf("/")
+      if (lastIdx >= 0) {
+        path.substring(lastIdx + 1)
+      } else {
+        path
+      }
+    } else {
+      throw new NullPointerException("Null path cannot be convert to an app")
+    }
+  }
 
+  private def getOrAddNewCurIndex(app: String): AtomicInteger = {
+    val ci = curIndexes.get(app)
+    if (ci != null) {
+      ci
+    } else {
+      val newCi = new AtomicInteger(-1)
+      curIndexes.put(app, newCi)
+      newCi
+    }
+  }
 
-  private def loadDataById(id: Int = 0) = {
+  private def loadDataById(app: String, id: Int = 0) = {
+    val curIndex = getOrAddNewCurIndex(app)
     val curId = curIndex.get()
     if (curId >= id) {
-      val (did, pidx, action) = readBySingleId(id)
+      val (did, pidx, action) = readBySingleId(app, id)
       if (did != null) {
         if (action != null) {
-          config.append(did, pidx, action)
+          deviceConfig.append(did, pidx, action)
         } else {
-          config.remove(did, pidx)
+          deviceConfig.remove(did, pidx)
         }
       }
     } else {
       //curIndex.set(id)
       val trueId = curId + 1
-      val res = readByAfterId(trueId)
+      val res = readByAfterId(app, trueId)
       val iter = res.iterator()
       while (iter.hasNext) {
         val (did, pidx, action) = iter.next()
-        config.append(did, pidx, action)
+        deviceConfig.append(did, pidx, action)
       }
     }
   }
 
-  private def readBySingleId(id: Int): (String, Int, Action) = {
+  private def readBySingleId(app: String, id: Int): (String, Int, Action) = {
+    val appTbl = "dc_%s".format(app)
     val conn = mysqlPool.getConnection
     if (conn != null) {
-      val pstat = conn.prepareStatement("select did, pidx, cmd, avg, used from deviceConfig where id = ?")
+      val pstat = conn.prepareStatement("select did, pidx, cmd, avg, used from " + appTbl + " where id = ?")
       pstat.setInt(1, id)
       try {
         val resSet = pstat.executeQuery()
@@ -283,10 +353,11 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
     }
   }
 
-  private def readByAfterId(id: Int): util.List[(String, Int, Action)] = {
+  private def readByAfterId(app: String, id: Int): util.List[(String, Int, Action)] = {
+    val appTbl = "dc_%s".format(app)
     val conn = mysqlPool.getConnection
     if (conn != null) {
-      val pstat = conn.prepareStatement("select id, did, pidx, cmd, avg, used from deviceConfig where id >= ? and used = 1")
+      val pstat = conn.prepareStatement("select id, did, pidx, cmd, avg, used from " + appTbl + " where id >= ? and used = 1")
       pstat.setInt(1, id)
       try {
         var maxId = -1
@@ -306,7 +377,10 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
             }
           }
         }
-        if (maxId >= 0) curIndex.set(maxId)
+        if (maxId >= 0) {
+          val curIndex = getOrAddNewCurIndex(app)
+          curIndex.set(maxId)
+        }
         res
       } finally {
         MySQLAccessor.closeConn(conn, pstat)
@@ -327,8 +401,9 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
       case "MUL" => MulAction(lines(1).toDouble, avg = at)
       case "DIV" => DivAction(lines(1).toDouble, avg = at)
       case "RVS" => RvsAction(avg = at)
+      case "EXPR1" => Expr1Action(lines(1), avg = at)
       case _ => {
-        log.warn("Unsupported action: %s".format(cmd))
+        log.warn("Unsupported conf.action: %s".format(cmd))
         null
       }
     }
@@ -337,9 +412,11 @@ class DeviceConfigMananger(prop: Properties) extends Logging{
 
 class DeviceConfigManangerSink(fun: () => DeviceConfigMananger) extends Serializable{
 
-  private lazy val config = fun()
+  private lazy val deviceConfig = fun()
 
-  def configMap = config.configMap
+  def configMap = deviceConfig.configMap
+
+  def appConfig(appName: String) = deviceConfig.getAppConf(appName)
 }
 
 object DeviceConfigManangerSink {
