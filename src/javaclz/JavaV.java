@@ -10,7 +10,7 @@ public class JavaV {
 
     // used for base
     public static final String MASTER_HOST = "sjtumaster.master.host";
-    public static final String STREAMING_TIME_INTERVAL = "sjtumaster.streaming.time.interal";
+    public static final String STREAMING_TIME_SEC_INTERVAL = "sjtumaster.streaming.time.interal";
 
     // used for kafka
     public static final String KAFKA_PARALLELISM_NUM = "sjtumaster.kafka.parallelism.num";
@@ -28,7 +28,7 @@ public class JavaV {
     public static final String SPARKSTREAMING_CLEANED_TOPIC = "sjtumaster.sparkstreaming.cleaned.topic";
     public static final String SPARKSTREAMING_AVG_TOPIC = "sjtumaster.sparkstreaming.cleaned.topic";
 
-    public static final String DEVICE_CONFIG_PATH = "sjtumaster.device.deviceconfig.path";
+    public static final String DEVICE_CONFIG_PATH = "sjtumaster.device.conf.deviceconfig.path";
     public static final String DC_ZK_HOST = "sjtumaster.dc.zk.host";
     public static final String DC_ZK_PORT = "sjtumaster.dc.zk.port";
     public static final String DC_ZK_TIMEOUT = "sjtumaster.dc.zk.timout";

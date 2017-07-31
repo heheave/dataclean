@@ -34,7 +34,7 @@ public class ZkManager {
 
     private final ZkSerializer zkSer;
 
-    private ZkClient zkClient;
+    private volatile ZkClient zkClient;
 
     public ZkManager(String serverUrl, int sessionTimeout, int connectionTimeout, ZkSerializer zkSer) {
         this.serverUrl = serverUrl;
@@ -70,8 +70,8 @@ public class ZkManager {
     }
 
     public void close() {
-        ZkClient zkClient = getClient();
-        zkClient.close();
+        getClient().close();
+        zkClient = null;
     }
 
 }

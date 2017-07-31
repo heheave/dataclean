@@ -1,5 +1,7 @@
 package javaclz.persist;
 
+import conf.DeviceConfigMananger;
+import conf.NodeHook;
 import javaclz.JavaV;
 import javaclz.persist.accessor.ModulePersistence;
 import javaclz.persist.accessor.PersistenceFactory;
@@ -13,6 +15,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 public class AdapterPersistence implements Persistence {
@@ -21,13 +25,17 @@ public class AdapterPersistence implements Persistence {
 
 	private final Properties conf;
 
+	private final String defaultDbName;
+
 	private final DbAccessorConf mongDbConf;
 
 	private final FileAccessorConf fileConf;
 
-	private ModulePersistence dbPa;
+	private Map<String, ModulePersistence> dbPas;
 
 	private ModulePersistence filePa;
+
+	private final String[] hookIds;
 
 	public AdapterPersistence(Configuration hconf, Properties conf) {
 		this.conf = conf;
@@ -35,21 +43,25 @@ public class AdapterPersistence implements Persistence {
 		mongDbConf.setDbType(DBTYPE.MONGO);
 		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST, "192.168.1.110");
 		int port = Integer.parseInt(this.conf.getProperty(JavaV.PERSIST_MONGODB_PORT, "27017"));
-		String dbname = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME, "device");
+		defaultDbName = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME, "device");
 		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT, "1000"));
 		mongDbConf.setDbHost(host);
 		mongDbConf.setDbPort(port);
-		mongDbConf.setDbName(dbname);
+		mongDbConf.setDbName(defaultDbName);
 
 		//Configuration hconf = new Configuration();
 		String fileDateFormat = this.conf.getProperty(JavaV.PERSIST_FILE_DATE_FORMAT, "yyyy-MM-dd_HH");
 		hconf.setBoolean("dfs.support.append", true);
 		fileConf = new FileAccessorConf(hconf);
 		fileConf.setDateFormat(fileDateFormat);
+
+		hookIds = new String[2];
 	}
 
 	public void start() {
-		dbPa = PersistenceFactory.getAccessor(mongDbConf);
+		dbPas = new HashMap<String, ModulePersistence>();
+		ModulePersistence dbPa = PersistenceFactory.getAccessor(mongDbConf);
+		dbPas.put(defaultDbName, dbPa);
 		filePa = PersistenceFactory.getAccessor(fileConf);
 		if (dbPa == null) {
 			log.warn("db persistence accessor init error");
@@ -58,9 +70,43 @@ public class AdapterPersistence implements Persistence {
 		if (filePa == null) {
 			log.warn("fs persistence accessor init error");
 		}
+		hookIds[0] = DeviceConfigMananger.addNewHook(new NodeHook() {
+			@Override
+			public void trigerOn(String app, Object data) {
+				DbAccessorConf dbConf = new DbAccessorConf();
+				dbConf.setDbName(app);
+				// TODO(now only one mongo db is allow)
+				dbConf.setDbHost(mongDbConf.getDbHost());
+				dbConf.setDbPort(mongDbConf.getDbPort());
+				dbConf.setTimeout(String.valueOf(mongDbConf.getTimeout()));
+				dbConf.setDbType(mongDbConf.getDbType());
+				try {
+					addNewPersistence(dbConf);
+				} catch (Exception e) {
+					log.warn("Add persistence error: " + app);
+				} finally {
+					log.info("Add app persistence" + app + ", size: " + dbPas.size());
+				}
+			}
+		});
+
+		hookIds[1] = DeviceConfigMananger.addDeleteHook(new NodeHook() {
+			@Override
+			public void trigerOn(String app, Object data) {
+				try {
+					removePersistence(app);
+				} catch (Exception e) {
+					log.warn("Close persistence error: " + app);
+				} finally {
+					log.info("Remove app persistence" + app + ", size: " + dbPas.size());
+				}
+			}
+		});
 	}
 
 	public void stop() {
+		DeviceConfigMananger.rmNewHook(hookIds[0]);
+		DeviceConfigMananger.rmDeleteHook(hookIds[1]);
 		// now this will not throw exception so stop it first
 		if (filePa != null) {
 			try {
@@ -70,24 +116,48 @@ public class AdapterPersistence implements Persistence {
 			} finally {
 				filePa = null;
 			}
-		}
 
-		if (dbPa != null) {
-			try {
-				dbPa.close();
-			} catch (Exception e) {
-				log.warn("Stop persist accessor error", e);
-			} finally {
-				dbPa = null;
+			synchronized (dbPas) {
+				for (Map.Entry<String, ModulePersistence> entry : dbPas.entrySet()) {
+					try {
+						entry.getValue().close();
+					} catch (Exception e) {
+						log.warn("Stop db accessor error with database: " + entry.getKey(), e);
+					}
+				}
+				dbPas.clear();
 			}
 		}
+	}
 
+	public void addNewPersistence(DbAccessorConf dbConf) throws Exception {
+		String dbName = dbConf.getDbName();
+		if (dbName != null && !dbPas.containsKey(dbName)) {
+			ModulePersistence dbPa = PersistenceFactory.getAccessor(dbConf);
+			if (dbPa == null) {
+				throw new NullPointerException("Could not get persistence on" + dbConf.getDbName());
+			}
+			synchronized (dbPas) {
+				dbPas.put(dbConf.getDbName(), dbPa);
+			}
+		}
+	}
+
+	public void removePersistence(String dbName) throws Exception {
+		ModulePersistence removedPa = dbPas.remove(dbName);
+		if (removedPa != null) {
+			removedPa.close();
+		}
 	}
 
 	@Override
 	public void persistence(PersistenceData pd, PersistenceOpt popt, PersistenceLevel plevel) throws Exception {
 		boolean isBackup;
 		if (plevel.isMain()) {
+			ModulePersistence dbPa = dbPas.get(popt.getStr1());
+			if (dbPa == null) {
+				dbPa = dbPas.get(defaultDbName);
+			}
 			if (dbPa != null && pd != null && popt != null) {
 				try {
 					log.info("Try to persist data to persist");
@@ -121,9 +191,14 @@ public class AdapterPersistence implements Persistence {
 	public void persistence(Collection<PersistenceData> pds, PersistenceOpt popt, PersistenceLevel plevel) throws Exception {
 		boolean isBackup;
 		if (plevel.isMain()) {
+			ModulePersistence dbPa = dbPas.get(popt.getStr1());
+			if (dbPa == null) {
+				log.info("USING DEFAULT ...................");
+				dbPa = dbPas.get(defaultDbName);
+			}
 			if (dbPa != null && pds != null && popt != null) {
 				try {
-					log.info("Try to persist datas to persist");
+					log.info("Try to persist datas to persist: " + popt.getStr1());
 					dbPa.persistenceBatch(popt, pds);
 					log.info("Successfully persisted to main");
 					isBackup = plevel.isForce() && plevel.isBackup();

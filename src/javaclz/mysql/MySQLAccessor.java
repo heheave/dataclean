@@ -34,7 +34,7 @@ public class MySQLAccessor{
         ds.setJdbcUrl(url);
         ds.setUser(user);
         ds.setPassword(passwd);
-        // use default deviceconfig
+        // use default conf.deviceconfig
         try {
             ds.setDriverClass("com.mysql.jdbc.Driver");
         } catch (PropertyVetoException e) {
