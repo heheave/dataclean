@@ -15,7 +15,7 @@ import conf.DeviceConfigManangerSink
 import conf.action.{Actions}
 import avgcache.{AvgFactory, AvgCacheManager}
 import kafka.{SimpleKafkaUtils}
-import metric.MessageMetric
+import metric._
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
 import org.apache.spark.streaming.scheduler.{StreamingListenerBatchStarted, StreamingListenerBatchCompleted, StreamingListenerReceiverStarted, StreamingListener}
@@ -46,8 +46,8 @@ object CleanerMain extends Logging {
     val sparkConf = new SparkConf()
     sparkConf.setAppName("Cleaner")
       .setMaster(deployUrl)
-      // Can this make a difference ???
       .set("spark.throw.exception.without.resource", "false")
+      // Can this make a difference ???
       .set("spark.streaming.unpersist", "true")
     val sparkContext = new SparkContext(sparkConf)
 
@@ -109,6 +109,10 @@ object CleanerMain extends Logging {
 
     val invalidAccumulator = streamingContext.sparkContext.accumulator(0)
 
+    val appAccumulator = streamingContext.sparkContext.
+      accumulable(new util.ArrayList[AppAccumulatorInfo]().asInstanceOf[util.List[AppAccumulatorInfo]],
+        "APP-ACCUMULATOR")(new AppAccumulator)
+
     streamingContext.addStreamingListener(new StreamingListener {
 
       override def onBatchStarted(batchStarted: StreamingListenerBatchStarted): Unit = {
@@ -123,9 +127,30 @@ object CleanerMain extends Logging {
           + ", PD: " + batchInfo.processingDelay + ", TD: " + batchInfo.totalDelay
         )
 
-        MessageMetric.invalidSet(invalidAccumulator.value)
-        MessageMetric.validIncrease(batchInfo.numRecords)
-        log.info(s"For now total ${MessageMetric.validNum} valid messages and ${MessageMetric.invalidNum} invalid message has been tackled")
+        MessageMetric.invalidNum.infoIn(invalidAccumulator.value)
+        MessageMetric.validNum.infoIn(batchInfo.numRecords)
+        log.info(s"For now total ${MessageMetric.validNum.numStatistics.get()} " +
+          s"valid messages and ${MessageMetric.invalidNum.numStatistics.get()} invalid message has been tackled")
+
+        val appValues = appAccumulator.value
+        val iitt = appValues.iterator()
+        while (iitt.hasNext) {
+          val e = iitt.next()
+          log.info("--------" + e.app + " : " + e.mn+ " : " + e.vp + " : " +e.ip+ " : " + e.cp+ " : " + e.up)
+        }
+        MessageMetric.appMetricInfoIn(appValues)
+        val info = MessageMetric.getMetricByAppName("app1")
+        if (!info.isDefined) {
+          log.info("------------------- Not defined")
+        } else {
+          val detail = info.get
+          log.info("--------" + detail.app + " : " +
+            detail.messageNum.get + " : " +
+            detail.validNum.get + " : " +
+            detail.invalidNum.get + " : " +
+            detail.configNum.get + " : " +
+            detail.unconfigNum.get)
+        }
       }
     })
 
@@ -148,6 +173,9 @@ object CleanerMain extends Logging {
           val realtimePersistOpt = new MongoPersistenceOpt(dbname, realtimeTblName, new FilePersistenceOpt(fileRealtimeBasePath, null))
           val avgPersistOpt = new MongoPersistenceOpt(dbname, minAvgTblName, new FilePersistenceOpt(fileAvgBasePath, null))
 
+
+          val messageMetricMap = new util.HashMap[String, AppAccumulatorInfo]()
+
           while (iter.hasNext) {
             val msg = iter.next()._2
             val msgJson = JSONObject.fromObject(msg)
@@ -160,10 +188,17 @@ object CleanerMain extends Logging {
             val ptimeStamp = msgJson.getLong(JsonField.DeviceValue.PTIMESTAMP)
             var portIdx = 0
             var hasInvalid = false
+
+            var validPort = 0
+            var invalidPort = 0
+            var configPort = 0
+            var unconfigPort = 0
+
             while (portIdx < portNum) {
               val valueJson = values.getJSONObject(portIdx)
               val value = valueJson.get(JsonField.DeviceValue.VALUE)
               val action = configMap.getActions(id, portIdx)
+              if (action != null) configPort += 1 else unconfigPort += 1
               if (action != null && value != null) {
                 log.info("id: " + id + ", conf.action: " + action.getClass.getName + ", type: " + action.avgType())
                 val transferedV = action.transferedV(Actions.objToDouble(value))
@@ -190,10 +225,21 @@ object CleanerMain extends Logging {
                 }
               }
               if (valueJson.containsKey(JsonField.DeviceValue.VALID) && !valueJson.getBoolean(JsonField.DeviceValue.VALID)) {
+                invalidPort += 1
                 hasInvalid = true
+              } else {
+                validPort += 1
               }
               //printer.println(valueJson.toString())
               portIdx += 1
+            }
+
+            // metric info
+            val appMetric = messageMetricMap.get(app)
+            if (appMetric == null) {
+              messageMetricMap.put(app, AppAccumulatorInfo(app, 1, invalidPort, validPort, configPort, unconfigPort))
+            } else {
+              appMetric.addWithDI((app, 1, validPort, invalidPort, configPort, unconfigPort))
             }
 
             //printer.close()
@@ -213,6 +259,18 @@ object CleanerMain extends Logging {
               invalidAccumulator += 1
             }
           }
+
+          val metricList = new util.ArrayList[AppAccumulatorInfo](messageMetricMap.size())
+          val MAiter = messageMetricMap.entrySet().iterator()
+          var idx = 0
+          while (MAiter.hasNext) {
+            val entry = MAiter.next()
+            log.info("app-----------" + entry.getKey + " : " + entry.getValue)
+            metricList.add(entry.getValue)
+            idx += 1
+          }
+          appAccumulator += metricList
+
           log.info("---------------------AVG realtime----------------" + realtimeObjs.size() + realtimePersistOpt.getStr1 + realtimePersistOpt.getStr2)
           val realIter = realtimeObjs.entrySet().iterator()
           while (realIter.hasNext) {

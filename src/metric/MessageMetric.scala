@@ -1,40 +1,59 @@
 package metric
 
+import java.util
 import java.util.concurrent.atomic.{AtomicLong}
 
 /**
   * Created by xiaoke on 17-7-17.
   */
+
+// this object is used to store some metric information
 object MessageMetric {
 
-  private val validStatistics = new AtomicLong(0)
+  val validNum = new NumMetric
 
-  private val invalidStatistics = new AtomicLong(0)
+  val invalidNum = new NumMetric
 
+  private val appStatisticsMap = new util.HashMap[String, AppMetric]()
 
-  def validSet(num: Long) = {
-    val oldV = validStatistics.get()
-    if (oldV < num) {
-      validStatistics.set(num)
+  def getMetricByAppName(app: String): Option[AppMetric] = appStatisticsMap.synchronized {
+    val metric = appStatisticsMap.get(app)
+    metric match {
+      case null => None
+      case _ => Some(metric)
     }
   }
 
-  def validIncrease(num: Long) = {
-    validStatistics.addAndGet(num)
-  }
-
-  def invalidSet(num: Long) = {
-    val oldV = invalidStatistics.get()
-    if (oldV < num) {
-      invalidStatistics.set(num)
+  def appMetricInfoIn(appValues: util.List[AppAccumulatorInfo]): Unit = appStatisticsMap.synchronized {
+    if (appValues != null) {
+      appValues.synchronized {
+        val iter = appValues.iterator()
+        while (iter.hasNext) {
+          val v = iter.next()
+          val metric = appStatisticsMap.get(v.app)
+          if (metric == null) {
+            val newAppMetric = new AppMetric(v.app)
+            newAppMetric.infoIn(v)
+            appStatisticsMap.put(v.app, newAppMetric)
+          } else {
+            metric.infoIn(v)
+          }
+        }
+        appValues.clear()
+      }
     }
   }
 
-  def invalidIncrease(num: Long) = {
-    invalidStatistics.addAndGet(num)
+  def appMetricRemove(app: String): Option[AppMetric] = appStatisticsMap.synchronized {
+    val metric = appStatisticsMap.remove(app)
+    metric match {
+      case null => None
+      case _ => Some(metric)
+    }
   }
 
-  def validNum = validStatistics.get()
+  def appMetricClear(): Unit = appStatisticsMap.synchronized {
+    appStatisticsMap.clear()
+  }
 
-  def invalidNum = invalidStatistics.get()
 }
