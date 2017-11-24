@@ -35,22 +35,20 @@ class CacheInfo(btime: Long) {
   }
 }
 
-case class CacheKey(d: String, p: Int) {
+case class CacheKey(d: String) {
 
   val did = d
 
-  val pidx = p
-
   override def equals(other: Any): Boolean = other match {
     case that: CacheKey =>
-        did == that.did &&
-        pidx == that.pidx
+        did == that.did
     case _ => false
   }
 
   override def hashCode(): Int = {
-    val state = Seq(did, pidx)
-    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+    if (did == null) 0 else did.hashCode
+    //val state = Seq(did)
+    //state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }
 
@@ -113,8 +111,8 @@ sealed class AvgCacheMap(avg: Avg, fun: Avg => Unit) extends Logging{
 
   def isEmpty = avgMap.isEmpty
 
-  def addData(did: String, pidx: Int, timestamp: Long, data: Double): CacheInfo = {
-    val key = CacheKey(did, pidx)
+  def addData(did: String, timestamp: Long, data: Double): CacheInfo = {
+    val key = CacheKey(did)
     val cacheInfo = avgMap.get(key)
     val ctime = avg.format(timestamp)
     log.info("-----------------------------ctime: " + ctime)
@@ -155,7 +153,7 @@ sealed class AvgCacheManager extends Logging{
     }
   }
 
-  def putData(did: String, pidx: Int, timestamp: Long, data: Double, avg: Avg): CacheInfo = {
+  def putData(did: String, timestamp: Long, data: Double, avg: Avg): CacheInfo = {
     if (avg != null) {
       val cacheMap = cacheMaps.get(avg)
       if (cacheMap == null) {
@@ -166,12 +164,12 @@ sealed class AvgCacheManager extends Logging{
         if (oldCacheMap == null) {
           log.info("------------ACM-----------Add New Map: " + avg.avgName())
           newCacheMap.startCheckRunner(excutorPool)
-          newCacheMap.addData(did, pidx, timestamp, data)
+          newCacheMap.addData(did, timestamp, data)
         } else {
-          oldCacheMap.addData(did, pidx, timestamp, data)
+          oldCacheMap.addData(did, timestamp, data)
         }
       } else {
-        cacheMap.addData(did, pidx, timestamp, data)
+        cacheMap.addData(did, timestamp, data)
       }
     } else {
       null
@@ -188,7 +186,7 @@ class AvgCacheTool(fun: () => AvgCacheManager) extends Serializable{
 
   lazy val avgCache = fun()
 
-  def addData(did: String, pidx: Int, timestamp: Long, data: Double, avg: Avg): CacheInfo = avgCache.putData(did, pidx, timestamp, data, avg)
+  def addData(did: String, timestamp: Long, data: Double, avg: Avg): CacheInfo = avgCache.putData(did, timestamp, data, avg)
 }
 
 

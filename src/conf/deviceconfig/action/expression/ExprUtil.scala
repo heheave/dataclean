@@ -1,17 +1,18 @@
-package conf.action.expression
+package conf.deviceconfig.action.expression
 
 import java.util
 
+import conf.deviceconfig.action.Actions
 import org.apache.spark.Logging
 
 /**
   * Created by xiaoke on 17-6-21.
   */
 object ExprUtil extends Logging{
-  def fromString(str: String, XMark: Char): Expr = {
+  def fromString(str: String): Expr = {
     try {
       val stack = new util.Stack[Expr]
-      val list = toReversePolish(str, XMark)
+      val list = toReversePolish(str)
       val iter = list.iterator()
       while (iter.hasNext) {
         val elem = iter.next
@@ -24,11 +25,16 @@ object ExprUtil extends Logging{
             throw new IllegalArgumentException("Could not compile expr: " + str)
           }
         } else {
-          val expr = if (XMark == elem.charAt(0)) {
-            ExprFactory.variableExpr
-          } else {
+          val expr = try {
             ExprFactory.getConstantExpr(elem.toDouble)
+          } catch {
+            case nfe:NumberFormatException => ExprFactory.variableExpr(elem)
           }
+//          val expr = if (XMark == elem.charAt(0)) {
+//            ExprFactory.variableExpr()
+//          } else {
+//            ExprFactory.getConstantExpr(elem.toDouble)
+//          }
           stack.push(expr)
         }
       }
@@ -45,16 +51,14 @@ object ExprUtil extends Logging{
     }
   }
 
-  private def toReversePolish(str: String, mark: Char): util.List[String] = {
+  private def toReversePolish(str: String): util.List[String] = {
     val result = new util.LinkedList[String]()
     val stack = new util.Stack[Char]()
     val tmpNumSb = new StringBuffer()
     for (c <- str) {
       if (c != ' ') {
-        if ((c >= '0' && c <= '9') || c == '.') {
+        if (Actions.checkSign(c)) {
           tmpNumSb.append(c)
-        } else if (c == mark) {
-          result.add(String.valueOf(c))
         } else {
           if (tmpNumSb.length() > 0) {
             result.add(tmpNumSb.toString)

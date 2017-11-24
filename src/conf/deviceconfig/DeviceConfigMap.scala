@@ -2,11 +2,12 @@ package conf.deviceconfig
 
 import java.util
 
-import conf.action.Action
+import conf.deviceconfig.action.Action
 
 /**
   * Created by xiaoke on 17-6-1.
   */
+// for device config
 class DeviceConfigMap extends Serializable{
 
   private val actionsMap = new util.HashMap[String, util.Map[Int, Action]]()

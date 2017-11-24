@@ -1,11 +1,12 @@
-package conf.action
+package conf.deviceconfig.action
 
 /**
   * Created by xiaoke on 17-5-31.
   */
 
-import conf.action.expression.ExprUtil
+import conf.deviceconfig.action.expression.ExprUtil
 import avgcache.Avg
+import net.sf.json.JSONObject
 
 import scala.reflect.runtime.currentMirror
 import scala.tools.reflect.ToolBox
@@ -49,7 +50,7 @@ case class DivAction(divV: Double, avg: Option[Array[Avg]] = None) extends Actio
     if (originV != 0) {
       divV / originV
     } else {
-      throw new IllegalArgumentException("Div num should be zero: %f/%f".format(divV, originV))
+      throw new IllegalArgumentException("Div num shouldn't be zero: %f/%f".format(divV, originV))
     }
 }
 
@@ -71,24 +72,24 @@ case class ExprAction(expr: Array[Action], avg: Option[Array[Avg]] = None) exten
   }
 }
 
-case class Expr1Action(str: String, avg: Option[Array[Avg]] = None) extends Action {
-  private val expr = ExprUtil.fromString(str, Actions.XMARK)
-  override def avgType(): Array[Avg] = avg.getOrElse(null)
-  override def transferedV(originV: Double): Double =
-    if (expr != null) expr.compute(originV) else originV
-}
+//case class Expr1Action(str: String, avg: Option[Array[Avg]] = None) extends Action {
+//  private val expr = ExprUtil.fromString(str)
+//  override def avgType(): Array[Avg] = avg.getOrElse(null)
+//  override def transferedV(originV: JSONObject): Double =
+//    if (expr != null) expr.compute(originV) else throw new NullPointerException("Expr is null in Expr1Action")
+//}
 
 case class FunAction(fun: (Double) => Double, avg: Option[Array[Avg]] = None) extends Action {
   override def avgType() = avg.getOrElse(null)
   override def transferedV(originV: Double): Double = fun(originV)
 }
 
-case class StrAction(str: String, avg: Option[Array[Avg]] = None) extends Action {
-  override def avgType() = avg.getOrElse(null)
-  override def transferedV(originV: Double): Double = {
-    val toolBox = currentMirror.mkToolBox()
-    val tree = toolBox.parse(str.replaceAll(String.valueOf(Actions.XMARK), originV.toString))
-    val res = toolBox.eval(tree).asInstanceOf[Double]
-    res
-  }
-}
+//case class StrAction(str: String, avg: Option[Array[Avg]] = None) extends Action {
+//  override def avgType() = avg.getOrElse(null)
+//  override def transferedV(originV: Double): Double = {
+//    val toolBox = currentMirror.mkToolBox()
+//    val tree = toolBox.parse(str.replaceAll(String.valueOf(Actions.XMARK), originV.toString))
+//    val res = toolBox.eval(tree).asInstanceOf[Double]
+//    res
+//  }
+//}

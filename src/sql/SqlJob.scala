@@ -1,20 +1,16 @@
 package sql
 
 import java.io._
-import java.net.{Socket, InetSocketAddress, ServerSocket}
 import java.text.SimpleDateFormat
 import java.util
 import java.util.Map.Entry
-import java.util.{Comparator, Date, Properties, UUID}
-import java.util.concurrent.{Executors, ConcurrentHashMap}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.{Comparator,  Properties, UUID}
 import javaclz.{JsonField, JavaV, JavaConfigure}
 
 import net.sf.json.JSONObject
-import org.apache.log4j.Logger
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.{Logging, SparkEnv, SparkContext}
+import org.apache.spark.{Logging, SparkContext}
 import org.bson.BSONObject
 
 /**
@@ -22,77 +18,25 @@ import org.bson.BSONObject
   */
 class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Serializable with Logging{
 
-  private val socketIdGen = new AtomicInteger(0)
-
   private val sparkSqlContext = new SQLContext(sparkContext)
 
-  val socketServer = new ServerSocket()
-
-  val socketMap = new ConcurrentHashMap[Int, Socket]()
-
-  val executors = Executors.newFixedThreadPool(11)
-
-  @volatile var isAlive: Boolean = _
-
-  def start(): Unit ={
-    isAlive = true
-    val mainRunner = new Runnable {
-      override def run(): Unit = {
-        socketServer.bind(new InetSocketAddress("localhost", 20000))
-        while (isAlive) {
-          try {
-            val newSocket = socketServer.accept()
-            val socketId = socketIdGen.getAndIncrement()
-            socketMap.put(socketId, newSocket)
-            startNewJob(socketId)
-          } catch {
-            case ioe: IOException => log.warn("ServerSocket IOException ", ioe)
-            case e: Exception => log.warn("ServerSocket Exception", e)
-          }
-        }
-      }
-    }
-    executors.submit(mainRunner)
-    log.info("SqlJobManager has been started")
+  def submitNewJob(attrs: util.Map[String, String]): Array[String] = {
+    startNewJob(JSONObject.fromObject(attrs))
   }
 
-
-  def stop() = {
-    isAlive = false
-    executors.shutdown()
-    socketServer.close()
-    val socketMapIter = socketMap.entrySet().iterator()
-    while (socketMapIter.hasNext) {
-      retVal(Array("interpreted error"), socketMapIter.next().getKey)
-    }
-    log.info("SqlJobManager has stopped")
-  }
-
-  private def retVal(vals: Array[String], socketId: Int): Unit = {
-    val socket = socketMap.get(socketId)
-    try {
-      if (socket != null && !socket.isClosed && !socket.isOutputShutdown) {
-        val dos = new DataOutputStream(socket.getOutputStream)
-        vals.foreach(v => {
-          val bytes = v.getBytes()
-          dos.write(bytes, 0, bytes.length)
-        })
-        dos.close()
-      }
-    } finally {
-      socket.close()
-    }
+  def cancelAllJobs() = {
+    sparkContext.cancelAllJobs()
   }
 
   private def getHdfsRdd(time: Long) = {
     val dayStr = SqlJobMnager.hdfsDateFormat.format(time)
-    val dataBasePath = jconf.getStringOrElse(JavaV.SPARK_SQL_HDFS_BASEPATH, "/tmp/rdd/realtime/")
+    val dataBasePath = jconf.getStringOrElse(JavaV.SPARK_SQL_HDFS_BASEPATH)
     val dataPath = if (dataBasePath.endsWith("/")) {
       dataBasePath + "%s/*".format(dayStr)
     } else {
       dataBasePath + "/%s/*".format(dayStr)
     }
-    val minPartition = jconf.getIntOrElse(JavaV.SPARK_SQL_MIN_PARTITION, -1)
+    val minPartition = jconf.getIntOrElse(JavaV.SPARK_SQL_MIN_PARTITION)
     val textRdd = if(minPartition > 0) {
       sparkContext.textFile(dataPath, minPartition)
     } else {
@@ -105,7 +49,7 @@ class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Ser
   private def getMongoRdd(time: Long) = {
     val dayStr = SqlJobMnager.mongoDateFormat.format(time)
     val configure = sparkContext.hadoopConfiguration
-    val mongoInputUri = jconf.getStringOrElse(JavaV.SPARK_SQL_MONGO_BASEPATH, "mongodb://192.168.1.110:27017/device")
+    val mongoInputUri = jconf.getStringOrElse(JavaV.SPARK_SQL_MONGO_BASEPATH)
     configure.set("mongo.input.uri", mongoInputUri + ".realtime_%s".format(dayStr))
     configure.set("mongo.input.fields", SqlJobMnager.genMongoField())
     configure.set("mongo.input.noTimeout", "true")
@@ -122,17 +66,9 @@ class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Ser
     mongoRdd
   }
 
-  private def startNewJob(socketId: Int): Unit = {
-    val socket = socketMap.get(socketId)
-    val in = new BufferedReader(new InputStreamReader(socket.getInputStream))
-    val line = in.readLine()
-    log.info("--------------------------------------------" + line)
-    log.info("--------------------------------------------" + line)
-    log.info("--------------------------------------------" + line)
-
-    if (line != null) {
+  private def startNewJob(json: JSONObject): Array[String] = {
+    if (json != null) {
       try {
-        val json = JSONObject.fromObject(line)
         val jobType = json.remove(SqlCmdField.TYPE)
         var runner: Runnable = null
         if (jobType.equals(SqlCmdField.SQL)) {
@@ -142,26 +78,22 @@ class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Ser
           val mongoRdd = getMongoRdd(dayTime)
           val hdfsRdd = getHdfsRdd(dayTime)
           val unionRdd = mongoRdd.union(hdfsRdd)
-          val needToReplaceTblName = jconf.getStringOrElse(JavaV.SPARK_SQL_TEMP_TBLNAME, "deviceValue")
-          runner = new Runnable {
-            override def run(): Unit = {
-              val bt = System.currentTimeMillis()
-              log.info(s"--------------------------------------------Task start at: ${bt}")
-              val sqlRet = try {
-                val jobTblName = "Table%s".format(UUID.randomUUID().toString.substring(0, 7))
-                val realQuery = s.replaceAll(needToReplaceTblName, jobTblName)
-                SqlJobMnager.jobSql(sparkSqlContext, unionRdd, jobTblName, realQuery, p)
-              } catch {
-                case e: Throwable => {
-                  log.warn("Sql Error", e)
-                  Array[String]()
-                }
-              }
-              val et = System.currentTimeMillis()
-              log.info(s"--------------------------------------------Task finished at: ${bt}, total time cost is: ${et - bt}")
-              retVal(sqlRet, socketId)
+          val needToReplaceTblName = jconf.getStringOrElse(JavaV.SPARK_SQL_TEMP_TBLNAME)
+          val bt = System.currentTimeMillis()
+          log.info(s"--------------------------------------------Task start at: ${bt}")
+          val sqlRet = try {
+            val jobTblName = "Table%s".format(UUID.randomUUID().toString.substring(0, 7))
+            val realQuery = s.replaceAll(needToReplaceTblName, jobTblName)
+            SqlJobMnager.jobSql(sparkSqlContext, unionRdd, jobTblName, realQuery, p)
+          } catch {
+            case e: Throwable => {
+              log.warn("Sql Error", e)
+              Array[String]()
             }
           }
+          val et = System.currentTimeMillis()
+          log.info(s"--------------------------------------------Task finished at: ${bt}, total time cost is: ${et - bt}")
+          sqlRet
         } else {
           val btime = if (json.containsKey(SqlCmdField.BTIME)) {
             json.remove(SqlCmdField.BTIME).asInstanceOf[Long]
@@ -213,37 +145,28 @@ class SqlJobMnager(sparkContext: SparkContext, jconf: JavaConfigure) extends Ser
           val hdfsRdd = getHdfsRdd(dayTime)
           val unionRdd = mongoRdd.union(hdfsRdd)
           log.info("--------------------------------------------begin to run job")
-          runner = new Runnable {
-            override def run(): Unit = {
-              val bt = System.currentTimeMillis()
-              log.info(s"--------------------------------------------Task start at: ${bt}")
-              val rddRet = try {
-                SqlJobMnager.jobRdd(unionRdd, prop, btime, etime, interval, delta)
-              } catch {
-                case e: Throwable => {
-                  log.warn("Rdd Error", e)
-                  Array[String]()
-                }
-              }
-              val et = System.currentTimeMillis()
-              log.info(s"--------------------------------------------Task finished at: ${bt}, total time cost is: ${et - bt}")
-              retVal(rddRet, socketId)
+          val bt = System.currentTimeMillis()
+          log.info(s"--------------------------------------------Task start at: ${bt}")
+          val rddRet = try {
+            SqlJobMnager.jobRdd(unionRdd, prop, btime, etime, interval, delta)
+          } catch {
+            case e: Throwable => {
+              log.warn("Rdd Error", e)
+              Array[String]()
             }
           }
-        }
-        if (runner != null) {
-          executors.submit(runner)
-        } else {
-          retVal(Array("Null job occurred"), socketId)
+          val et = System.currentTimeMillis()
+          log.info(s"--------------------------------------------Task finished at: ${bt}, total time cost is: ${et - bt}")
+          rddRet
         }
       } catch {
         case e: Throwable => {
           log.warn("--------Throwable-----------" + e)
-          retVal(Array(e.getMessage), socketId)
+          Array(e.getMessage)
         }
       }
     } else {
-      retVal(Array("Null job info"), socketId)
+      Array("Null job info")
     }
   }
 }

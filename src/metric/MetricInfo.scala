@@ -7,7 +7,7 @@ import org.apache.spark.Logging
 /**
   * Created by xiaoke on 17-8-9.
   */
-trait MetricInfo[T] {
+trait MetricInfo[T] extends Serializable{
 
   def infoIn(merticInfo: T): Unit
 
@@ -21,37 +21,28 @@ class NumMetric extends MetricInfo[Long] {
   override def infoIn(merticInfo: Long): Unit = numStatistics.addAndGet(merticInfo)
 }
 
-class AppMetric(val app: String) extends MetricInfo[AnyRef] with Serializable{
+class MsgMetric extends MetricInfo[(Long, Long)]{
 
-  val messageNum = new AtomicLong(0)
+  val totalNum = new AtomicLong(0)
 
-  val invalidNum = new AtomicLong(0)
+  val todayNum = new AtomicLong(0)
 
-  val validNum = new AtomicLong(0)
+  val totalBytes = new AtomicLong(0)
 
-  val configNum = new AtomicLong(0)
+  val todayBytes = new AtomicLong(0)
 
-  val unconfigNum = new AtomicLong(0)
+  @volatile private var daySt = System.currentTimeMillis() / 86400000
 
-  override def infoIn(merticInfo: AnyRef): Unit = {
-    merticInfo match {
-      case null =>
-      case mi: AppMetric => {
-        messageNum.addAndGet(mi.messageNum.get())
-        validNum.addAndGet(mi.validNum.get())
-        invalidNum.addAndGet(mi.invalidNum.get())
-        configNum.addAndGet(mi.configNum.get())
-        unconfigNum.addAndGet(mi.unconfigNum.get())
-      }
-
-      case aai: AppAccumulatorInfo => {
-        messageNum.addAndGet(aai.mn)
-        validNum.addAndGet(aai.vp)
-        invalidNum.addAndGet(aai.ip)
-        configNum.addAndGet(aai.cp)
-        unconfigNum.addAndGet(aai.up)
-      }
-      case _ =>
+  override def infoIn(metricInfo: (Long, Long)) = synchronized {
+    val todaySt = System.currentTimeMillis() / 86400000
+    if (todaySt != daySt) {
+      todayNum.set(0)
+      todayBytes.set(0)
+      daySt = todaySt
     }
+    totalNum.addAndGet(metricInfo._1)
+    todayNum.addAndGet(metricInfo._1)
+    totalBytes.addAndGet(metricInfo._2)
+    todayBytes.addAndGet(metricInfo._2)
   }
 }

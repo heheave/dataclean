@@ -1,10 +1,11 @@
-package conf.deviceconfig
+package conf.appconfig
 
 import java.util
 
 /**
   * Created by xiaoke on 17-7-23.
   */
+// for app config
 case class AppEntry(id: Int,
                     appname: String,
                     mongourl: String,

@@ -10,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by xiaoke on 17-6-4.
  */
+@Deprecated
 public class ZkClientSelf {
 
     private static final Logger log = Logger.getLogger(ZkClientSelf.class);

@@ -39,8 +39,6 @@ public class FilePersistence implements ModulePersistence {
 		}
 	}
 
-
-
 	@Override
 	public synchronized void persistenceOne(PersistenceOpt opt, PersistenceData data)  throws Exception{
 		List<PersistenceData> dataList = new ArrayList<PersistenceData>(1);

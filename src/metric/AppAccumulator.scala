@@ -8,29 +8,23 @@ import org.apache.spark.{Logging, AccumulatorParam}
   * Created by xiaoke on 17-8-9.
   */
 
-class AppAccumulatorInfo(val app: String, var mn: Long, var vp: Long, var ip: Long, var cp: Long, var up: Long) extends Serializable{
-  def addWithDI(di: (String, Long, Long, Long, Long, Long)) = {
-    assert(app == di._1)
+class AppAccumulatorInfo(val id: Int, var mn: Long, var mb: Long) extends Serializable{
+  def addWithDI(di: (Int, Long, Long)) = {
+    assert(id == di._1)
     mn += di._2
-    vp += di._3
-    ip += di._4
-    cp += di._5
-    up += di._6
+    mb += di._3
   }
 
   def addWithAAI(aai: AppAccumulatorInfo) = {
-    assert(app == aai.app)
+    assert(id == aai.id)
     mn += aai.mn
-    vp += aai.vp
-    ip += aai.ip
-    cp += aai.cp
-    up += aai.up
+    mb += aai.mb
   }
 }
 
 object AppAccumulatorInfo {
-  def apply(app: String, mn: Long, vp: Long, ip: Long, cp: Long, up: Long) = {
-    new AppAccumulatorInfo(app, mn, vp, ip, cp, up)
+  def apply(app: Int, mn: Long, mb: Long) = {
+    new AppAccumulatorInfo(app, mn, mb)
   }
 }
 
@@ -47,7 +41,7 @@ class AppAccumulator extends AccumulatorParam[util.List[AppAccumulatorInfo]] wit
         var hasApp = false
         while (idx < r1.size() && hasApp) {
           val r1Value = r1.get(idx)
-          if (r1Value.app.equals(r2Value.app)) {
+          if (r1Value.id.equals(r2Value.id)) {
             r1Value.addWithAAI(r2Value)
             hasApp = true
           }

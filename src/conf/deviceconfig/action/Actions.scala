@@ -1,4 +1,4 @@
-package conf.action
+package conf.deviceconfig.action
 
 import avgcache.{Avg, AvgFactory}
 
@@ -6,8 +6,6 @@ import avgcache.{Avg, AvgFactory}
   * Created by xiaoke on 17-6-1.
   */
 object Actions {
-
-  val XMARK = 'X'
 
   val AVG_HOUR = Array(AvgFactory.hourAvg)
   val AVG_MIN = Array(AvgFactory.minAvg)
@@ -17,7 +15,7 @@ object Actions {
     if(avgStr == null) {
       None
     } else {
-      val avgs = avgStr.split("&")
+      val avgs = avgStr.split(":")
       val result = new Array[Avg](avgs.length)
       var idx = 0
       while (idx < avgs.length) {
@@ -43,6 +41,10 @@ object Actions {
         Some(result)
       }
     }
+  }
+
+  def checkSign(c: Char): Boolean = {
+    (c >= '0' && c <= '9') || c == '.' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
   }
 
   def objToDouble(obj: Any): Double = obj match {

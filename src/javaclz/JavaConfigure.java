@@ -59,108 +59,162 @@ public class JavaConfigure {
         check();
         return XML_VAR_MAP.get(key);
     }
-    
-    public String getString(String key) {
-        return mapGet(key);
-    }
 
-    public String getStringOrElse(String key, String defualt) {
-        String e = mapGet(key);
+    public String getStringOrElse(Mark<String> mark) {
+        String e = mapGet(mark.key);
         if (e != null) {
             return e;
         } else {
-            return defualt;
+            return mark.dv();
         }
     }
 
-    public boolean getBoolean(String key) {
-        return Boolean.parseBoolean(XML_VAR_MAP.get(key));
+    public String getStringOrElse(Mark<String> mark, String str) {
+        String e = mapGet(mark.key);
+        if (e != null) {
+            return e;
+        } else {
+            return str;
+        }
     }
 
-    public boolean getBooleanOrElse(String key, boolean defualt) {
+    public boolean getBooleanOrElse(Mark<Boolean> mark) {
         try {
-            String e = mapGet(key);
+            String e = mapGet(mark.key);
             if (e != null) {
                 return Boolean.parseBoolean(e.toString());
             } else {
-                return defualt;
+                return mark.dv();
             }
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             e.printStackTrace();
-            return defualt;
+            return mark.dv();
         }
     }
 
-    public int getInt(String key) {
-        return Integer.parseInt(XML_VAR_MAP.get(key));
+    public boolean getBooleanOrElse(Mark<Boolean> mark, boolean b) {
+        try {
+            String e = mapGet(mark.key);
+            if (e != null) {
+                return Boolean.parseBoolean(e.toString());
+            } else {
+                return b;
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return b;
+        }
     }
 
-    public int getIntOrElse(String key, int defualt) {
+    public int getIntOrElse(Mark<Integer> mark) {
         try {
-            String e = mapGet(key);
+            String e = mapGet(mark.key);
             if (e != null) {
                 return Integer.parseInt(e.toString());
             } else {
-                return defualt;
+                return mark.dv();
             }
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             e.printStackTrace();
-            return defualt;
+            return mark.dv();
         }
     }
 
-    public long getLong(String key) {
-        return Long.parseLong(XML_VAR_MAP.get(key));
+    public int getIntOrElse(Mark<Integer> mark, int i) {
+        try {
+            String e = mapGet(mark.key);
+            if (e != null) {
+                return Integer.parseInt(e.toString());
+            } else {
+                return i;
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return i;
+        }
     }
 
-    public long getLongOrElse(String key, long defualt) {
+    public long getLongOrElse(Mark<Long> mark) {
         try {
-            String e = mapGet(key);
+            String e = mapGet(mark.key);
             if (e != null) {
                 return Long.parseLong(e.toString());
             } else {
-                return defualt;
+                return mark.dv();
             }
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             e.printStackTrace();
-            return defualt;
+            return mark.dv();
         }
     }
 
-    public float getFloat(String key) {
-        return Float.parseFloat(XML_VAR_MAP.get(key));
+    public long getLongOrElse(Mark<Long> mark, long l) {
+        try {
+            String e = mapGet(mark.key);
+            if (e != null) {
+                return Long.parseLong(e.toString());
+            } else {
+                return l;
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return l;
+        }
     }
 
-    public float getFloatOrElse(String key, float defualt) {
+    public float getFloatOrElse(Mark<Float> mark) {
         try {
-            String e = mapGet(key);
+            String e = mapGet(mark.key);
             if (e != null) {
                 return Float.parseFloat(e.toString());
             } else {
-                return defualt;
+                return mark.dv();
             }
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             e.printStackTrace();
-            return defualt;
+            return mark.dv();
         }
     }
 
-
-    public double getDouble(String key) {
-        return Double.parseDouble(XML_VAR_MAP.get(key));
+    public float getFloatOrElse(Mark<Float> mark, float f) {
+        try {
+            String e = mapGet(mark.key);
+            if (e != null) {
+                return Float.parseFloat(e.toString());
+            } else {
+                return f;
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return f;
+        }
     }
 
-    public double getDoubleOrElse(String key, double defualt) {
+    public double getDoubleOrElse(Mark<Double> mark) {
         try {
-            String e = mapGet(key);
+            String e = mapGet(mark.key);
             if (e != null) {
                 return Double.parseDouble(e.toString());
             } else {
-                return defualt;
+                return mark.dv();
             }
-        } catch (Exception e) {
+        } catch (NumberFormatException e) {
             e.printStackTrace();
-            return defualt;
+            return mark.dv();
+        }
+    }
+
+    public double getDoubleOrElse(Mark<Double> mark, double d) {
+        try {
+            String e = mapGet(mark.key);
+            if (e != null) {
+                return Double.parseDouble(e.toString());
+            } else {
+                return d;
+            }
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return d;
         }
     }
 }

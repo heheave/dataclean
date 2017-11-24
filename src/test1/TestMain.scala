@@ -4,7 +4,7 @@ import java.io.IOException
 import java.util.Properties
 import java.util.concurrent._
 import javaclz.JavaV
-import javaclz.mysql.MySQLAccessor
+//import javaclz.mysql.MySQLAccessor
 import javaclz.persist.accessor.PersistenceFactory
 import javaclz.persist.accessor.PersistenceFactory.DBTYPE
 import javaclz.persist.config.DbAccessorConf
@@ -12,8 +12,8 @@ import javaclz.persist.data.PersistenceDataJsonWrap
 import javaclz.persist.opt.MongoPersistenceOpt
 import javaclz.zk.ZkClientSelf
 
-import conf.DeviceConfigMananger
-import conf.action.expression.ExprUtil
+//import conf.DeviceConfigMananger
+import conf.deviceconfig.action.expression.ExprUtil
 import net.sf.json.JSONObject
 import org.apache.log4j.{Logger, PropertyConfigurator}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
@@ -191,31 +191,35 @@ object TestMain {
 
     //val zkDec = new DeviceConfigMananger(new Properties())
 
-    val zkClient = new ZkClientSelf("localhost", 2181, 2000, null)
+//    val zkClient = new ZkClientSelf("localhost", 2181, 2000, null)
+//
+//    val path = zkClient.zk.exists("/application/app1", false)
+//    if (path == null) {
+//      zkClient.zk.create("/application/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+//      zkClient.zk.create("/deviceconf/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
+//    }
+//
+//    var i = 0
+//    while (i < 1) {
+//      val data = "{'mode':'did','data':'123'}"
+//      val data1 = "{'idx':1}"
+//      zkClient.zk.setData("/application/app1", data.getBytes(), -1)
+//      zkClient.zk.setData("/deviceconf/app1", data1.getBytes(), -1)
+//      Thread.sleep(3000)
+//      i += 1
+//    }
+//
+//    zkClient.zk().close()
+//
+//    Thread.sleep(3000)
+////    log.info("end")
+//
+//    log.info("xxxxxxxxxx")
 
-    val path = zkClient.zk.exists("/application/app1", false)
-    if (path == null) {
-      zkClient.zk.create("/application/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-      zkClient.zk.create("/deviceconf/app1", null, Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL)
-    }
-
-    var i = 0
-    while (i < 1) {
-      val data = "{'mode':'did','data':'123'}"
-      val data1 = "{'idx':1}"
-      zkClient.zk.setData("/application/app1", data.getBytes(), -1)
-      zkClient.zk.setData("/deviceconf/app1", data1.getBytes(), -1)
-      Thread.sleep(3000)
-      i += 1
-    }
-
-    zkClient.zk().close()
-
-    Thread.sleep(3000)
-//    log.info("end")
-
-    log.info("xxxxxxxxxx")
-
+    val jo = JSONObject.fromObject("{'id': 8, 'id2': 3,'5':10}")
+    val expr = ExprUtil.fromString("(id + 5 + 5) * (id2 - 4)")
+    println(expr)
+    println(expr.compute(jo))
   }
 
 }

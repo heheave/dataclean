@@ -1,7 +1,7 @@
 package javaclz.persist;
 
-import conf.DeviceConfigMananger;
-import conf.NodeHook;
+//import conf.DeviceConfigMananger;
+//import conf.NodeHook;
 import javaclz.JavaV;
 import javaclz.persist.accessor.ModulePersistence;
 import javaclz.persist.accessor.PersistenceFactory;
@@ -41,16 +41,16 @@ public class AdapterPersistence implements Persistence {
 		this.conf = conf;
 		mongDbConf = new DbAccessorConf();
 		mongDbConf.setDbType(DBTYPE.MONGO);
-		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST, "192.168.1.110");
-		int port = Integer.parseInt(this.conf.getProperty(JavaV.PERSIST_MONGODB_PORT, "27017"));
-		defaultDbName = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME, "device");
-		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT, "1000"));
+		String host = this.conf.getProperty(JavaV.PERSIST_MONGODB_HOST.key, JavaV.PERSIST_MONGODB_HOST.dv());
+		int port = Integer.parseInt(this.conf.getProperty(JavaV.PERSIST_MONGODB_PORT.key, JavaV.PERSIST_MONGODB_PORT.dv()));
+		defaultDbName = this.conf.getProperty(JavaV.PERSIST_MONGODB_DBNAME.key, JavaV.PERSIST_MONGODB_DBNAME.dv());
+		mongDbConf.setTimeout(conf.getProperty(JavaV.PERSIST_MONGODB_TIMEOUT.key, JavaV.PERSIST_MONGODB_TIMEOUT.dv()));
 		mongDbConf.setDbHost(host);
 		mongDbConf.setDbPort(port);
 		mongDbConf.setDbName(defaultDbName);
 
 		//Configuration hconf = new Configuration();
-		String fileDateFormat = this.conf.getProperty(JavaV.PERSIST_FILE_DATE_FORMAT, "yyyy-MM-dd_HH");
+		String fileDateFormat = this.conf.getProperty(JavaV.PERSIST_FILE_DATE_FORMAT.key, JavaV.PERSIST_FILE_DATE_FORMAT.dv());
 		hconf.setBoolean("dfs.support.append", true);
 		fileConf = new FileAccessorConf(hconf);
 		fileConf.setDateFormat(fileDateFormat);
@@ -70,43 +70,43 @@ public class AdapterPersistence implements Persistence {
 		if (filePa == null) {
 			log.warn("fs persistence accessor init error");
 		}
-		hookIds[0] = DeviceConfigMananger.addNewHook(new NodeHook() {
-			@Override
-			public void trigerOn(String app, Object data) {
-				DbAccessorConf dbConf = new DbAccessorConf();
-				dbConf.setDbName(app);
-				// TODO(now only one mongo db is allow)
-				dbConf.setDbHost(mongDbConf.getDbHost());
-				dbConf.setDbPort(mongDbConf.getDbPort());
-				dbConf.setTimeout(String.valueOf(mongDbConf.getTimeout()));
-				dbConf.setDbType(mongDbConf.getDbType());
-				try {
-					addNewPersistence(dbConf);
-				} catch (Exception e) {
-					log.warn("Add persistence error: " + app);
-				} finally {
-					log.info("Add app persistence" + app + ", size: " + dbPas.size());
-				}
-			}
-		});
-
-		hookIds[1] = DeviceConfigMananger.addDeleteHook(new NodeHook() {
-			@Override
-			public void trigerOn(String app, Object data) {
-				try {
-					removePersistence(app);
-				} catch (Exception e) {
-					log.warn("Close persistence error: " + app);
-				} finally {
-					log.info("Remove app persistence" + app + ", size: " + dbPas.size());
-				}
-			}
-		});
+//		hookIds[0] = DeviceConfigMananger.addNewHook(new NodeHook() {
+//			@Override
+//			public void trigerOn(String app, Object data) {
+//				DbAccessorConf dbConf = new DbAccessorConf();
+//				dbConf.setDbName(app);
+//				// TODO(now only one mongo db is allow)
+//				dbConf.setDbHost(mongDbConf.getDbHost());
+//				dbConf.setDbPort(mongDbConf.getDbPort());
+//				dbConf.setTimeout(String.valueOf(mongDbConf.getTimeout()));
+//				dbConf.setDbType(mongDbConf.getDbType());
+//				try {
+//					addNewPersistence(dbConf);
+//				} catch (Exception e) {
+//					log.warn("Add persistence error: " + app);
+//				} finally {
+//					log.info("Add app persistence" + app + ", size: " + dbPas.size());
+//				}
+//			}
+//		});
+//
+//		hookIds[1] = DeviceConfigMananger.addDeleteHook(new NodeHook() {
+//			@Override
+//			public void trigerOn(String app, Object data) {
+//				try {
+//					removePersistence(app);
+//				} catch (Exception e) {
+//					log.warn("Close persistence error: " + app);
+//				} finally {
+//					log.info("Remove app persistence" + app + ", size: " + dbPas.size());
+//				}
+//			}
+//		});
 	}
 
 	public void stop() {
-		DeviceConfigMananger.rmNewHook(hookIds[0]);
-		DeviceConfigMananger.rmDeleteHook(hookIds[1]);
+		//DeviceConfigMananger.rmNewHook(hookIds[0]);
+		//DeviceConfigMananger.rmDeleteHook(hookIds[1]);
 		// now this will not throw exception so stop it first
 		if (filePa != null) {
 			try {

@@ -1,11 +1,11 @@
-package conf.action.expression
+package conf.deviceconfig.action.expression
 
 /**
   * Created by xiaoke on 17-6-21.
   */
 object ExprFactory {
 
-  val variableExpr = VariableExpr()
+  def variableExpr(key: String) = VariableExpr(key)
 
   def getConstantExpr(const: Double) = ConstantExpr(const)
 
